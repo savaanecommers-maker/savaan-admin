@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function refreshSession() {
-    const refresh = localStorage.getItem('admin_refresh_token')
+    const refresh = sessionStorage.getItem('admin_refresh_token')
     if (!refresh) return
     const res = await fetch(`${api.BASE_URL}/api/auth/refresh`, {
       method: 'POST',
@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
     })
     if (res.ok) {
       const data = await res.json()
-      localStorage.setItem('admin_access_token', data.access_token)
+      sessionStorage.setItem('admin_access_token', data.access_token)
       const payload = JSON.parse(atob(data.access_token.split('.')[1]))
       setUser({ id: payload.id, email: payload.email, role: payload.role })
       setIsAuthenticated(true)

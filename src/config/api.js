@@ -1,23 +1,27 @@
-// Central API client — replaces Supabase client in admin portal
+// Central API client for admin portal (Supabase has been fully removed)
+
+// SEC-11: Tokens stored in sessionStorage (cleared when browser tab closes).
+// TODO: Migrate to httpOnly cookies for full XSS protection — requires backend
+// Set-Cookie support and CORS credentials configuration.
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
 function getToken() {
-  return localStorage.getItem('admin_access_token')
+  return sessionStorage.getItem('admin_access_token')
 }
 
 function saveTokens(access, refresh) {
-  localStorage.setItem('admin_access_token', access)
-  if (refresh) localStorage.setItem('admin_refresh_token', refresh)
+  sessionStorage.setItem('admin_access_token', access)
+  if (refresh) sessionStorage.setItem('admin_refresh_token', refresh)
 }
 
 function clearTokens() {
-  localStorage.removeItem('admin_access_token')
-  localStorage.removeItem('admin_refresh_token')
+  sessionStorage.removeItem('admin_access_token')
+  sessionStorage.removeItem('admin_refresh_token')
 }
 
 async function refreshAccessToken() {
-  const refresh = localStorage.getItem('admin_refresh_token')
+  const refresh = sessionStorage.getItem('admin_refresh_token')
   if (!refresh) return null
   const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
     method: 'POST',
@@ -26,7 +30,7 @@ async function refreshAccessToken() {
   })
   if (!res.ok) { clearTokens(); return null }
   const data = await res.json()
-  localStorage.setItem('admin_access_token', data.access_token)
+  sessionStorage.setItem('admin_access_token', data.access_token)
   return data.access_token
 }
 
@@ -73,7 +77,7 @@ const api = {
   login:     (email, password) =>
     request('POST', '/api/auth/admin/login', { email, password }),
   logout:    () => {
-    const refresh = localStorage.getItem('admin_refresh_token')
+    const refresh = sessionStorage.getItem('admin_refresh_token')
     clearTokens()
     return request('POST', '/api/auth/logout', { refresh_token: refresh })
   },

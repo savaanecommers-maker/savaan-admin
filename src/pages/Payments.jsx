@@ -13,6 +13,8 @@ const METHOD_LABELS = {
   cod:         'Cash on Delivery',
 }
 
+const PER_PAGE = 20
+
 export default function Payments() {
   const [orders, setOrders]       = useState([])
   const [loading, setLoading]     = useState(true)
@@ -20,15 +22,18 @@ export default function Payments() {
   const [method, setMethod]       = useState('all')
   const [status, setStatus]       = useState('all')
   const [page, setPage]           = useState(1)
+  const [total, setTotal]         = useState(0)
   const [actionId, setActionId]   = useState(null) // tracks which order is being approved/rejected
-  const PER_PAGE = 15
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(1) }, [])
 
-  async function load() {
+  async function load(p = page) {
     setLoading(true)
-    const { data } = await api.get('/api/orders')
+    const offset = (p - 1) * PER_PAGE
+    const { data } = await api.get(`/api/orders?limit=${PER_PAGE}&offset=${offset}`)
     setOrders(data?.orders ?? data ?? [])
+    setTotal(data?.total ?? (data?.orders ?? data ?? []).length)
+    setPage(p)
     setLoading(false)
   }
 
@@ -71,18 +76,20 @@ export default function Payments() {
     setActionId(null)
   }
 
+  // Client-side filter on the current page's results for instant UX;
+  // server handles pagination via limit/offset.
   const filtered = orders.filter(o => {
-    const matchSearch =
+    const matchSearch = !search ||
       o.order_number?.toLowerCase().includes(search.toLowerCase()) ||
       o.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       o.email?.toLowerCase().includes(search.toLowerCase()) ||
-      o.payment_id?.toLowerCase().includes(search.toLowerCase())
+      o.payment_reference?.toLowerCase().includes(search.toLowerCase())
     const matchMethod = method === 'all' || o.payment_method === method
     const matchStatus = status === 'all' || paymentStatus(o).toLowerCase() === status
     return matchSearch && matchMethod && matchStatus
   })
 
-  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE))
 
   const totalRevenue   = orders.filter(o => paymentStatus(o) === 'Paid').reduce((s, o) => s + parseFloat(o.total || 0), 0)
   const pendingAmount  = orders.filter(o => paymentStatus(o) === 'Pending').reduce((s, o) => s + parseFloat(o.total || 0), 0)
@@ -116,7 +123,7 @@ export default function Payments() {
       )
     },
     {
-      key: 'payment_id', label: 'Transaction ID',
+      key: 'payment_reference', label: 'Transaction ID',
       render: v => v
         ? <span className="font-mono text-xs text-slate-500">{v}</span>
         : <span className="text-slate-300 text-xs">—</span>
@@ -133,7 +140,7 @@ export default function Payments() {
       ...filtered.map(o => [
         o.order_number, o.full_name || o.email,
         METHOD_LABELS[o.payment_method] || o.payment_method,
-        o.payment_id || '', o.total, o.discount, paymentStatus(o), formatDate(o.created_at)
+        o.payment_reference || '', o.total, o.discount, paymentStatus(o), formatDate(o.created_at)
       ])
     ]
     const csv  = rows.map(r => r.join(',')).join('\n')
@@ -253,16 +260,16 @@ export default function Payments() {
         <div className="flex items-center gap-3 p-4 border-b border-slate-200">
           <div className="relative flex-1 max-w-xs">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+            <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search order, customer, transaction..."
               className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500" />
           </div>
-          <select value={method} onChange={e => { setMethod(e.target.value); setPage(1) }}
+          <select value={method} onChange={e => setMethod(e.target.value)}
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 focus:outline-none focus:border-teal-500">
             <option value="all">All Methods</option>
             {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}
+          <select value={status} onChange={e => setStatus(e.target.value)}
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 focus:outline-none focus:border-teal-500">
             <option value="all">All Status</option>
             <option value="paid">Paid</option>
@@ -279,21 +286,20 @@ export default function Payments() {
           <div className="py-16 text-center text-slate-400 text-sm">Loading payments...</div>
         ) : (
           <>
-            <Table columns={cols} data={paginated} />
+            <Table columns={cols} data={filtered} />
             <div className="px-4 pb-4 pt-2 flex items-center justify-between">
               <p className="text-xs text-slate-400">
-                {filtered.length} transactions · {formatPrice(filtered.reduce((s, o) => s + parseFloat(o.total || 0), 0))} total
+                Page {page} of {totalPages} · {total} total transactions
               </p>
               <div className="flex items-center gap-1">
-                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                <button onClick={() => load(page - 1)} disabled={page === 1 || loading}
                   className="px-2 py-1 rounded-lg text-xs font-semibold hover:bg-slate-100 text-slate-600 disabled:opacity-40">
                   ← Prev
                 </button>
                 <span className="px-2 text-xs text-slate-500">
-                  {page} / {Math.max(1, Math.ceil(filtered.length / PER_PAGE))}
+                  {page} / {totalPages}
                 </span>
-                <button onClick={() => setPage(p => Math.min(Math.ceil(filtered.length / PER_PAGE), p + 1))}
-                  disabled={page >= Math.ceil(filtered.length / PER_PAGE)}
+                <button onClick={() => load(page + 1)} disabled={page >= totalPages || loading}
                   className="px-2 py-1 rounded-lg text-xs font-semibold hover:bg-slate-100 text-slate-600 disabled:opacity-40">
                   Next →
                 </button>

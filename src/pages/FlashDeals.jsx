@@ -52,12 +52,14 @@ export default function FlashDeals() {
       setSaving(false); return
     }
 
-    await api.put(`/api/products/${targetId}`, {
+    const res = await api.put(`/api/products/${targetId}`, {
       is_flash_deal:     true,
       flash_deal_price:  parseFloat(form.flash_deal_price),
       flash_deal_expiry: form.flash_deal_expiry || null,
     })
-    setSaving(false); setModal(false); load()
+    setSaving(false)
+    if (res.error) { alert('Failed to save flash deal: ' + (res.error?.message || res.error)); return }
+    setModal(false); load()
   }
 
   async function removeDeal(id) {

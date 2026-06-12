@@ -15,25 +15,33 @@ const METHOD_LABELS = {
   net_banking: 'Net Banking', wallet: 'Wallet', cod: 'COD',
 }
 
+const REPORTS_LIMIT = 200 // fetch enough for chart aggregations; not a cursor-based list
+
 export default function Reports() {
   const [orders, setOrders]         = useState([])
   const [products, setProducts]     = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading]       = useState(true)
   const [range, setRange]           = useState('month')
+  const [page, setPage]             = useState(1)
+  const [total, setTotal]           = useState(0)
+  const PER_PAGE = 20
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(1) }, [])
 
-  async function load() {
+  async function load(p = page) {
     setLoading(true)
+    const offset = (p - 1) * PER_PAGE
     const [or, pr, cr] = await Promise.all([
-      api.get('/api/orders'),
+      api.get(`/api/orders?limit=${REPORTS_LIMIT}&offset=${offset}`),
       api.get('/api/products/all'),
       api.get('/api/categories'),
     ])
     const ordersArr = (or.data?.orders ?? or.data ?? [])
     const sorted = ordersArr.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     setOrders(sorted)
+    setTotal(or.data?.total ?? sorted.length)
+    setPage(p)
     setProducts(pr.data?.products ?? pr.data ?? [])
     setCategories(cr.data || [])
     setLoading(false)
@@ -138,10 +146,23 @@ export default function Reports() {
             </button>
           ))}
         </div>
-        <button onClick={exportCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-          <Download size={14} /> Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            <Download size={14} /> Export CSV
+          </button>
+          <div className="flex items-center gap-1 ml-2">
+            <button onClick={() => load(page - 1)} disabled={page === 1 || loading}
+              className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              ←
+            </button>
+            <span className="px-2 text-xs text-slate-500">Page {page}</span>
+            <button onClick={() => load(page + 1)} disabled={orders.length < REPORTS_LIMIT || loading}
+              className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              →
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading ? (

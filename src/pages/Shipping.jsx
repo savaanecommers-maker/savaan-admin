@@ -16,11 +16,15 @@ const STATUS_LABELS = {
   returned:         'Returned',
 }
 
+const PER_PAGE = 20
+
 export default function Shipping() {
   const [orders, setOrders]     = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('all')
+  const [page, setPage]         = useState(1)
+  const [total, setTotal]       = useState(0)
   const [settings, setSettings] = useState({
     free_shipping_above: '999',
     shipping_charge:     '99',
@@ -33,17 +37,20 @@ export default function Shipping() {
   const [updatingId, setUpdatingId]         = useState(null)
   const [tab, setTab]                       = useState('orders')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(1) }, [])
 
-  async function load() {
+  async function load(p = page) {
     setLoading(true)
+    const offset = (p - 1) * PER_PAGE
     const [or, sr] = await Promise.all([
-      api.get('/api/orders?limit=500'),
+      api.get(`/api/orders?limit=${PER_PAGE}&offset=${offset}`),
       api.get('/api/admin/settings'),
     ])
-    const filtered = (or.data?.orders ?? or.data ?? []).filter(o => o.status !== 'cancelled')
+    const list = (or.data?.orders ?? or.data ?? []).filter(o => o.status !== 'cancelled')
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    setOrders(filtered)
+    setOrders(list)
+    setTotal(or.data?.total ?? list.length)
+    setPage(p)
     if (sr.data && typeof sr.data === 'object') {
       setSettings(prev => ({ ...prev, ...sr.data }))
     }
@@ -55,7 +62,7 @@ export default function Shipping() {
     const res = await api.put(`/api/orders/${orderId}/status`, { status: newStatus })
     setUpdatingId(null)
     if (res.error) { alert('Status update failed: ' + (res.error?.message || res.error)); return }
-    load()
+    load(page)
   }
 
   async function saveShippingSettings() {
@@ -178,6 +185,20 @@ export default function Shipping() {
               ? <div className="py-16 text-center text-slate-400 text-sm">Loading shipments...</div>
               : <Table columns={cols} data={filteredOrders} />
             }
+            <div className="px-4 pb-4 pt-2 flex items-center justify-between">
+              <p className="text-xs text-slate-400">Page {page} of {Math.max(1, Math.ceil(total / PER_PAGE))}</p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => load(page - 1)} disabled={page === 1 || loading}
+                  className="px-2 py-1 rounded-lg text-xs font-semibold hover:bg-slate-100 text-slate-600 disabled:opacity-40">
+                  ← Prev
+                </button>
+                <span className="px-2 text-xs text-slate-500">{page} / {Math.max(1, Math.ceil(total / PER_PAGE))}</span>
+                <button onClick={() => load(page + 1)} disabled={page >= Math.ceil(total / PER_PAGE) || loading}
+                  className="px-2 py-1 rounded-lg text-xs font-semibold hover:bg-slate-100 text-slate-600 disabled:opacity-40">
+                  Next →
+                </button>
+              </div>
+            </div>
           </Card>
         </>
       )}

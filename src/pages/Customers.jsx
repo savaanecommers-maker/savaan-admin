@@ -1,4 +1,10 @@
 // ── CUSTOMERS ────────────────────────────────────────────────
+// FUNC-7/DEAD-4 note: This page (/customers) is a standalone customer list with
+// paginated table and order-history modal. AdminUsers (/users) also shows a
+// "Customers" tab but is primarily the admin-team management page (role editing,
+// activate/deactivate admins). Both routes are intentionally kept — they serve
+// different entry points. If this overlap is unwanted, remove the /customers route
+// in App.jsx and redirect to /users.
 import { useEffect, useState } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Card, Pagination, Modal, formatPrice, formatDate } from '../components/ui/index'
