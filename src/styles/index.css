@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { font-family: 'DM Sans', sans-serif; }
+
+:root {
+  --teal: #0d9488;
+  --teal-light: #ccfbf1;
+  --ink: #0f172a;
+  --slate: #64748b;
+  --border: #e2e8f0;
+  --surface: #f8fafc;
+}
+
+body { background: #f1f5f9; color: #0f172a; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Sidebar active */
+.nav-active {
+  background: rgba(13,148,136,0.12);
+  color: #0d9488;
+  border-right: 3px solid #0d9488;
+}
+
+/* Table row hover */
+.table-row:hover { background: #f8fafc; }
+
+/* Fade in animation — no transform so fixed-position children (modals) work correctly */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in { animation: fadeIn 0.3s ease; }
+
+/* Chart tooltip */
+.recharts-tooltip-wrapper { outline: none !important; }
