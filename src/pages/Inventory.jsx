@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
 import Layout from '../components/layout/Layout'
-import { Card, Button, Modal, Input, Select, Badge, Table } from '../components/ui/index'
+import { Card, Button, Modal, Input, Select, Badge, Table, Pagination } from '../components/ui/index'
 import api from '../config/api'
 import { Package, Plus, Minus, AlertTriangle, Search, History } from 'lucide-react'
 
 const LOW_STOCK = 10
 const OUT_STOCK = 0
 
+const PER_PAGE = 20
+
 export default function Inventory() {
   const [products, setProducts]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
   const [filter, setFilter]       = useState('all')
+  const [page, setPage]           = useState(1)
   const [modal, setModal]         = useState(false)
   const [logsModal, setLogsModal] = useState(false)
   const [logs, setLogs]           = useState([])
@@ -84,6 +87,9 @@ export default function Inventory() {
     return matchSearch && matchFilter
   })
 
+  const totalPages = Math.ceil(filtered.length / PER_PAGE)
+  const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+
   const outOfStock = products.filter(p => p.stock <= OUT_STOCK).length
   const lowStock   = products.filter(p => p.stock > OUT_STOCK && p.stock <= LOW_STOCK).length
   const inStock    = products.filter(p => p.stock > LOW_STOCK).length
@@ -144,7 +150,7 @@ export default function Inventory() {
           { label: 'Low Stock',    value: lowStock,  color: 'bg-amber-50',   text: 'text-amber-600',   cursor: 'low' },
           { label: 'Out of Stock', value: outOfStock,color: 'bg-red-50',     text: 'text-red-600',     cursor: 'out' },
         ].map(s => (
-          <button key={s.label} onClick={() => setFilter(filter === s.cursor ? 'all' : s.cursor)}
+          <button key={s.label} onClick={() => { setFilter(filter === s.cursor ? 'all' : s.cursor); setPage(1) }}
             className={`p-4 rounded-xl border flex items-center gap-3 transition-all text-left ${
               filter === s.cursor ? 'border-teal-500 shadow-md' : 'border-slate-200 hover:border-slate-300'
             } bg-white`}>
@@ -160,11 +166,11 @@ export default function Inventory() {
         <div className="flex items-center gap-3 p-4 border-b border-slate-200">
           <div className="relative flex-1 max-w-xs">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="Search products..."
               className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500" />
           </div>
-          <select value={filter} onChange={e => setFilter(e.target.value)}
+          <select value={filter} onChange={e => { setFilter(e.target.value); setPage(1) }}
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 focus:outline-none focus:border-teal-500">
             <option value="all">All Products</option>
             <option value="ok">In Stock</option>
@@ -175,7 +181,19 @@ export default function Inventory() {
         </div>
         {loading
           ? <div className="py-16 text-center text-slate-400 text-sm">Loading inventory...</div>
-          : <Table columns={cols} data={filtered} />
+          : (
+            <>
+              <Table columns={cols} data={paginated} />
+              <div className="px-4 pb-4 flex items-center justify-between">
+                <p className="text-xs text-slate-400">
+                  {filtered.length === 0
+                    ? 'No products found'
+                    : `Showing ${(page - 1) * PER_PAGE + 1}–${Math.min(page * PER_PAGE, filtered.length)} of ${filtered.length} products`}
+                </p>
+                <Pagination page={page} totalPages={totalPages} onPage={p => { setPage(p) }} />
+              </div>
+            </>
+          )
         }
       </Card>
 

@@ -31,8 +31,8 @@ export default function Notifications() {
       api.get('/api/notifications/all'),
       api.get('/api/users'),
     ])
-    setNotifs(nr.data?.notifications ?? [])
-    setUsers(ur.data || [])
+    setNotifs(nr.data?.notifications ?? nr.data?._list ?? nr.data?.items ?? (Array.isArray(nr.data) ? nr.data : []))
+    setUsers(ur.data?.users ?? ur.data?._list ?? ur.data?.items ?? (Array.isArray(ur.data) ? ur.data : []))
     setLoading(false)
   }
 

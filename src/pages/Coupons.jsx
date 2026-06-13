@@ -20,8 +20,13 @@ export default function Coupons() {
 
   async function load() {
     setLoading(true)
-    const { data } = await api.get('/api/coupons')
-    setCoupons(data || [])
+    const { data, error } = await api.get('/api/coupons')
+    if (error) {
+      alert('Failed to load coupons: ' + (error.message || error))
+      setLoading(false)
+      return
+    }
+    setCoupons(data?._list ?? data?.items ?? (Array.isArray(data) ? data : []))
     setLoading(false)
   }
 
@@ -29,7 +34,7 @@ export default function Coupons() {
   function openEdit(c) { setEditing(c.id); setForm(c); setModal(true) }
 
   async function save() {
-    if (!form.code) return
+    if (!form.code || !form.discount_value) return
     setSaving(true)
     const payload = {
       code:            form.code.toUpperCase(),

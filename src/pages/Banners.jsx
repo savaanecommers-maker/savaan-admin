@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Layout from '../components/layout/Layout'
-import { Card, Button, Modal, Input, Select, Badge, Table, formatDate } from '../components/ui/index'
+import { Card, Button, Modal, Input, Select, Badge, Table, Pagination, formatDate } from '../components/ui/index'
 import api from '../config/api'
 import { Plus, Edit2, Trash2, Image, Eye, EyeOff } from 'lucide-react'
 
@@ -28,6 +28,8 @@ export default function Banners() {
   const [form, setForm]             = useState(EMPTY)
   const [saving, setSaving]         = useState(false)
   const [preview, setPreview]       = useState(null)
+  const [page, setPage]             = useState(1)
+  const PER_PAGE = 10
 
   useEffect(() => { load() }, [])
 
@@ -38,10 +40,16 @@ export default function Banners() {
       api.get('/api/categories'),
       api.get('/api/products/all'),
     ])
-    const sorted = (br.data || []).sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+    if (br.error) {
+      alert('Failed to load banners: ' + (br.error.message || br.error))
+      setLoading(false)
+      return
+    }
+    const rawBanners = br.data?._list ?? br.data?.items ?? (Array.isArray(br.data) ? br.data : [])
+    const sorted = rawBanners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
     setBanners(sorted)
-    setCategories(cr.data || [])
-    setProducts(pr.data?.products ?? pr.data ?? [])
+    setCategories(cr.data?._list ?? cr.data?.items ?? (Array.isArray(cr.data) ? cr.data : []))
+    setProducts(pr.data?.products ?? pr.data?._list ?? pr.data?.items ?? (Array.isArray(pr.data) ? pr.data : []))
     setLoading(false)
   }
 
@@ -180,7 +188,19 @@ export default function Banners() {
         </div>
         {loading
           ? <div className="py-16 text-center text-slate-400 text-sm">Loading banners...</div>
-          : <Table columns={cols} data={banners} />
+          : (
+            <>
+              <Table columns={cols} data={banners.slice((page - 1) * PER_PAGE, page * PER_PAGE)} />
+              {banners.length > PER_PAGE && (
+                <div className="px-4 pb-4 flex items-center justify-between">
+                  <p className="text-xs text-slate-400">
+                    Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, banners.length)} of {banners.length} banners
+                  </p>
+                  <Pagination page={page} totalPages={Math.ceil(banners.length / PER_PAGE)} onPage={setPage} />
+                </div>
+              )}
+            </>
+          )
         }
       </Card>
 

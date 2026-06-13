@@ -40,7 +40,7 @@ export default function Dashboard() {
       const serverStats = statsRes.data || {}
       const allOrders   = ordersRes.data?.orders   || ordersRes.data   || []
       const products    = productsRes.data?.products || productsRes.data || []
-      const categories  = catsRes.data || []
+      const categories  = catsRes.data?._list ?? catsRes.data?.items ?? (Array.isArray(catsRes.data) ? catsRes.data : [])
 
       const now     = new Date()
       const start30 = new Date(now); start30.setDate(now.getDate() - 30)
@@ -104,8 +104,8 @@ export default function Dashboard() {
       // Recent 5 orders — allOrders used here for display only.
       // Stats are computed client-side; use /api/admin/stats for server-side aggregation when available.
       setRO(allOrders.slice(0, 5))
-    } catch (e) {
-      console.error(e)
+    } catch {
+      // dashboard will show zeros; non-critical loading failure
     } finally {
       setLoading(false)
     }

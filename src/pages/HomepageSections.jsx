@@ -106,8 +106,8 @@ export default function HomepageSections() {
       const data = Array.isArray(sr.data) ? sr.data : []
       setSections(data.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)))
       setAnalytics(Array.isArray(ar.data) ? ar.data : [])
-    } catch (e) {
-      console.error('Failed to load homepage sections', e)
+    } catch {
+      // non-critical — sections will be empty, UI shows appropriate state
     } finally {
       setLoading(false)
     }
@@ -123,8 +123,8 @@ export default function HomepageSections() {
         : []
       setAllProducts(list)
       setStaffPicks(new Set(list.filter(p => p.is_staff_pick).map(p => p.id)))
-    } catch (e) {
-      console.error('Failed to load products', e)
+    } catch {
+      // products list stays empty; user can retry with the Refresh button
     } finally {
       setSpLoading(false)
     }
@@ -135,8 +135,8 @@ export default function HomepageSections() {
     try {
       const { data } = await api.get('/api/brands?all=1')
       setBrands(Array.isArray(data) ? data : [])
-    } catch (e) {
-      console.error('Failed to load brands', e)
+    } catch {
+      // brands list stays empty; user can retry with the Refresh button
     } finally {
       setBrandsLoading(false)
     }

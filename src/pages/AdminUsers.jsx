@@ -39,8 +39,8 @@ export default function AdminUsers() {
       api.get('/api/admin/users'),
       api.get('/api/orders'),
     ])
-    setCustomers(cr.data?.users ?? [])
-    setAdmins(ar.data || [])
+    setCustomers(cr.data?.users ?? cr.data?._list ?? cr.data?.items ?? (Array.isArray(cr.data) ? cr.data : []))
+    setAdmins(ar.data?._list ?? ar.data?.items ?? (Array.isArray(ar.data) ? ar.data : []))
     setAllOrders(or.data?.orders ?? or.data ?? [])
     setLoading(false)
   }

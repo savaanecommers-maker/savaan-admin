@@ -253,8 +253,8 @@ export default function LuxuryCollections() {
     try {
       const res = await api.get('/api/luxury-collections/all')
       setCollections(Array.isArray(res.data) ? res.data : [])
-    } catch (e) {
-      console.error('Failed to load luxury collections', e)
+    } catch {
+      // collections list stays empty; UI shows appropriate state
     } finally { setLoading(false) }
   }
 
