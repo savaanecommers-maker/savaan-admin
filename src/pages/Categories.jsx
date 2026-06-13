@@ -128,11 +128,18 @@ export default function Categories() {
   const [loadingSubs, setLoadingSubs] = useState(false)
   const [selectedSubId, setSelectedSubId] = useState(null) // null | 'CREATE_NEW' | UUID
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/categories?all=1')
+    if (!mountedRef.current) return
     const sorted = (data || []).sort((a, b) => {
       if (a.display_order !== b.display_order) return a.display_order - b.display_order
       return a.name.localeCompare(b.name)

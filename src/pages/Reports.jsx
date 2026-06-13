@@ -27,7 +27,9 @@ export default function Reports() {
   const [total, setTotal]           = useState(0)
   const PER_PAGE = 20
 
-  useEffect(() => { load(1) }, [])
+  // Re-fetch when range changes so chart data reflects the selected period
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(1) }, [range])
 
   async function load(p = page) {
     setLoading(true)

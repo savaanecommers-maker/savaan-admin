@@ -63,6 +63,7 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     await api.logout()
+    sessionStorage.clear()   // clear all session data, not just token keys
     setUser(null)
     setIsAuthenticated(false)
   }

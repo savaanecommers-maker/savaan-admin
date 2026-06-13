@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Input, Select, Card, Pagination, formatPrice } from '../components/ui/index'
 import api from '../config/api'
@@ -16,11 +16,18 @@ export default function Coupons() {
   const [saving, setSaving]   = useState(false)
   const PER_PAGE = 8
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data, error } = await api.get('/api/coupons')
+    if (!mountedRef.current) return
     if (error) {
       alert('Failed to load coupons: ' + (error.message || error))
       setLoading(false)

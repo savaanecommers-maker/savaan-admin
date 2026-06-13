@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Button, Modal, Input, Select, Badge, Table, Pagination } from '../components/ui/index'
 import api from '../config/api'
@@ -22,11 +22,18 @@ export default function Inventory() {
   const [saving, setSaving]       = useState(false)
   const [form, setForm]           = useState({ change: '', reason: 'restock', note: '' })
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/products/all')
+    if (!mountedRef.current) return
     const list = data?.products ?? data ?? []
     const sorted = list.sort((a, b) => (a.stock || 0) - (b.stock || 0))
     setProducts(sorted)

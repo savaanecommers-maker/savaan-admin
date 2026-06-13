@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Badge, Table, Button, formatPrice, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -25,12 +25,19 @@ export default function Payments() {
   const [total, setTotal]         = useState(0)
   const [actionId, setActionId]   = useState(null) // tracks which order is being approved/rejected
 
-  useEffect(() => { load(1) }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load(1)
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load(p = page) {
     setLoading(true)
     const offset = (p - 1) * PER_PAGE
     const { data } = await api.get(`/api/orders?limit=${PER_PAGE}&offset=${offset}`)
+    if (!mountedRef.current) return
     setOrders(data?.orders ?? data ?? [])
     setTotal(data?.total ?? (data?.orders ?? data ?? []).length)
     setPage(p)

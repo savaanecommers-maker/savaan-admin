@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Button, Modal, Input, Select, Table, formatPrice } from '../components/ui/index'
 import api from '../config/api'
@@ -16,11 +16,18 @@ export default function FlashDeals() {
   const EMPTY = { product_id: '', flash_deal_price: '', flash_deal_expiry: '' }
   const [form, setForm] = useState(EMPTY)
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/products/all')
+    if (!mountedRef.current) return
     const all = data?.products ?? data ?? []
     setDeals(all.filter(p => p.is_flash_deal))
     setAll(all.filter(p => !p.is_flash_deal))

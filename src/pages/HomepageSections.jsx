@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Button, Modal, Input } from '../components/ui/index'
 import api from '../config/api'
@@ -93,8 +93,14 @@ export default function HomepageSections() {
   const [brandSaving, setBrandSaving] = useState(false)
   const [brandDeleting, setBrandDeleting] = useState(null)
 
+  const mountedRef = useRef(true)
+
   // ── loaders ─────────────────────────────────────────────────
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -103,13 +109,14 @@ export default function HomepageSections() {
         api.get('/api/homepage/sections'),
         api.get('/api/homepage/analytics/summary').catch(() => ({ data: [] })),
       ])
+      if (!mountedRef.current) return
       const data = Array.isArray(sr.data) ? sr.data : []
       setSections(data.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)))
       setAnalytics(Array.isArray(ar.data) ? ar.data : [])
     } catch {
       // non-critical — sections will be empty, UI shows appropriate state
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
   }
 

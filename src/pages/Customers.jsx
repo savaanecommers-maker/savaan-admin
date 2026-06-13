@@ -5,7 +5,7 @@
 // activate/deactivate admins). Both routes are intentionally kept — they serve
 // different entry points. If this overlap is unwanted, remove the /customers route
 // in App.jsx and redirect to /users.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Card, Pagination, Modal, formatPrice, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -22,7 +22,13 @@ export function Customers() {
   const [orders, setOrders]       = useState([])
   const PER_PAGE = 10
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -31,6 +37,7 @@ export function Customers() {
       api.get('/api/users'),
       api.get('/api/orders?limit=500'),
     ])
+    if (!mountedRef.current) return
     if (ur.error) setLoadError(ur.error.message || 'Failed to load customers')
     setCustomers(ur.data?.users ?? [])
     setAllOrders(or.data?.orders ?? or.data ?? [])

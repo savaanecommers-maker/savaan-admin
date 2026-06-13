@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Button, Input, Badge, Table, formatPrice, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -37,7 +37,13 @@ export default function Shipping() {
   const [updatingId, setUpdatingId]         = useState(null)
   const [tab, setTab]                       = useState('orders')
 
-  useEffect(() => { load(1) }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load(1)
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load(p = page) {
     setLoading(true)
@@ -46,6 +52,7 @@ export default function Shipping() {
       api.get(`/api/orders?limit=${PER_PAGE}&offset=${offset}`),
       api.get('/api/admin/settings'),
     ])
+    if (!mountedRef.current) return
     const list = (or.data?.orders ?? or.data ?? []).filter(o => o.status !== 'cancelled')
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     setOrders(list)

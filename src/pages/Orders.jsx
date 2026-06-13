@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Card, Pagination, formatPrice, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -15,13 +15,19 @@ export default function Orders() {
   const [selected, setSelected]   = useState(null)
   const [detailOrder, setDetail]  = useState(null)
   const [updating, setUpdating]   = useState(false)
+  const mountedRef = useRef(true)
   const PER_PAGE = 10
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/orders?limit=500')
+    if (!mountedRef.current) return
     setOrders(data?.orders ?? data ?? [])
     setLoading(false)
   }

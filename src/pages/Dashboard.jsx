@@ -26,9 +26,13 @@ export default function Dashboard() {
   const [recentOrders, setRO]   = useState([])
   const [loading, setLoading]   = useState(true)
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    let cancelled = false
+    loadAll(cancelled, () => cancelled)
+    return () => { cancelled = true }
+  }, [])
 
-  async function loadAll() {
+  async function loadAll(cancelled, isCancelled) {
     try {
       const [statsRes, ordersRes, productsRes, catsRes] = await Promise.all([
         api.get('/api/admin/stats'),
@@ -37,6 +41,7 @@ export default function Dashboard() {
         api.get('/api/categories'),
       ])
 
+      if (isCancelled && isCancelled()) return
       const serverStats = statsRes.data || {}
       const allOrders   = ordersRes.data?.orders   || ordersRes.data   || []
       const products    = productsRes.data?.products || productsRes.data || []

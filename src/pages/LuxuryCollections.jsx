@@ -244,18 +244,24 @@ export default function LuxuryCollections() {
   const [analyticsLoad, setAnalyticsLoad] = useState(false)
 
   const fileRef = useRef()
+  const mountedRef = useRef(true)
 
   // ── loaders ─────────────────────────────────────────────────
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     try {
       const res = await api.get('/api/luxury-collections/all')
+      if (!mountedRef.current) return
       setCollections(Array.isArray(res.data) ? res.data : [])
     } catch {
       // collections list stays empty; UI shows appropriate state
-    } finally { setLoading(false) }
+    } finally { if (mountedRef.current) setLoading(false) }
   }
 
   const loadAnalytics = useCallback(async () => {

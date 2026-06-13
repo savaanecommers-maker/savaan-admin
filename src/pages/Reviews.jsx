@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Button, Card, Pagination, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -11,11 +11,18 @@ export default function Reviews() {
   const [page, setPage]       = useState(1)
   const PER_PAGE = 10
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/reviews/all')
+    if (!mountedRef.current) return
     setReviews(data?.reviews ?? data ?? [])
     setLoading(false)
   }

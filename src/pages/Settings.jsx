@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Button, Input, Card } from '../components/ui/index'
 import api from '../config/api'
@@ -45,11 +45,18 @@ export default function Settings() {
   const [pwError, setPwError]     = useState('')
   const [pwSaved, setPwSaved]     = useState(false)
 
-  useEffect(() => { loadSettings() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    loadSettings()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function loadSettings() {
     setLoading(true)
     const { data } = await api.get('/api/admin/settings')
+    if (!mountedRef.current) return
     if (data && typeof data === 'object') {
       setSettings(prev => ({ ...prev, ...data }))
     }

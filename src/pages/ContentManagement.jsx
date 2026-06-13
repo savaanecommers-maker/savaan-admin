@@ -57,9 +57,14 @@ function LegalTab({ toast }) {
   const [loading,    setLoading]    = useState(true)
   const [saving,     setSaving]     = useState(false)
   const [preview,    setPreview]    = useState(false)
-  const textRef = useRef(null)
+  const textRef    = useRef(null)
+  const mountedRef = useRef(true)
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    loadAll()
+    return () => { mountedRef.current = false }
+  }, [])
   useEffect(() => {
     const d = docs[selected]
     if (d) { setContent(d.content || ''); setTitle(d.title || '') }
@@ -68,6 +73,7 @@ function LegalTab({ toast }) {
   async function loadAll() {
     setLoading(true)
     const { data } = await api.get('/api/content/admin/legal')
+    if (!mountedRef.current) return
     if (Array.isArray(data)) {
       const map = {}
       data.forEach(d => { map[d.slug] = d })
@@ -156,9 +162,17 @@ function LegalTab({ toast }) {
                   if (line.startsWith('- ') || line.startsWith('* '))
                     return <li key={i} className="ml-4 list-disc text-slate-600 text-sm">{line.slice(2)}</li>
                   if (line.trim() === '') return <div key={i} className="h-2" />
-                  const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  // Escape HTML first, then apply safe bold markdown only
+                  const escaped = line
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;')
+                  // Bold markdown: **text** — safe because content is already HTML-escaped
+                  const withBold = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
                   return <p key={i} className="text-slate-600 text-sm leading-relaxed mb-1"
-                    dangerouslySetInnerHTML={{ __html: escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />
+                    dangerouslySetInnerHTML={{ __html: withBold }} />
                 })}
               </div>
             </div>
@@ -202,11 +216,18 @@ function FaqTab({ toast }) {
 
   const emptyFaq = { category_id: '', question: '', answer: '', sort_order: 0, is_active: true }
 
-  useEffect(() => { load() }, [])
+  const faqMounted = useRef(true)
+
+  useEffect(() => {
+    faqMounted.current = true
+    load()
+    return () => { faqMounted.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/content/admin/faqs')
+    if (!faqMounted.current) return
     if (data) {
       setCategories(data.categories || [])
       setFaqs(data.faqs || [])
@@ -481,11 +502,18 @@ function ContactTab({ toast }) {
     { key: 'about_story',    label: 'Company Story',      type: 'textarea', icon: '📖', placeholder: 'SAVAAN was founded...' },
   ]
 
-  useEffect(() => { load() }, [])
+  const contactMounted = useRef(true)
+
+  useEffect(() => {
+    contactMounted.current = true
+    load()
+    return () => { contactMounted.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
     const { data } = await api.get('/api/content/admin/contact')
+    if (!contactMounted.current) return
     if (data && typeof data === 'object') setInfo(data)
     setLoading(false)
   }

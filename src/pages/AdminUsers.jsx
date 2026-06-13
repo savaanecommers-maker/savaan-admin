@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Badge, Button, Modal, Select, Table, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -30,15 +30,22 @@ export default function AdminUsers() {
   const [adminForm, setAdminForm] = useState({ role: 'customer_support', is_active: true })
   const [saving, setSaving]       = useState(false)
 
-  useEffect(() => { loadAll() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    loadAll()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function loadAll() {
     setLoading(true)
     const [cr, ar, or] = await Promise.all([
       api.get('/api/users'),
       api.get('/api/admin/users'),
-      api.get('/api/orders'),
+      api.get('/api/orders?limit=500'),
     ])
+    if (!mountedRef.current) return
     setCustomers(cr.data?.users ?? cr.data?._list ?? cr.data?.items ?? (Array.isArray(cr.data) ? cr.data : []))
     setAdmins(ar.data?._list ?? ar.data?.items ?? (Array.isArray(ar.data) ? ar.data : []))
     setAllOrders(or.data?.orders ?? or.data ?? [])

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Card, Button, Modal, Input, Select, Badge, Table, Pagination, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -31,7 +31,13 @@ export default function Banners() {
   const [page, setPage]             = useState(1)
   const PER_PAGE = 10
 
-  useEffect(() => { load() }, [])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -40,6 +46,7 @@ export default function Banners() {
       api.get('/api/categories'),
       api.get('/api/products/all'),
     ])
+    if (!mountedRef.current) return
     if (br.error) {
       alert('Failed to load banners: ' + (br.error.message || br.error))
       setLoading(false)

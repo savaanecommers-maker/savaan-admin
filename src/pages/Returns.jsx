@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Card, formatDate } from '../components/ui/index'
 import api from '../config/api'
@@ -56,13 +56,21 @@ export default function Returns() {
   const [adminNotes, setAdminNotes] = useState('')
   const [loadError, setLoadError] = useState('')
 
-  useEffect(() => { load() }, [statusFilter])
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter])
 
   async function load() {
     setLoading(true)
     setLoadError('')
     const params = statusFilter ? `?status=${statusFilter}` : ''
     const res = await api.get(`/api/returns${params}`)
+    if (!mountedRef.current) return
     if (res.error) {
       setLoadError('Failed to load return requests. Please try again.')
     } else {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Input, Select, Card, Pagination, formatPrice } from '../components/ui/index'
 import api from '../config/api'
@@ -49,9 +49,14 @@ export default function Products() {
   const [editingVariantId, setEditingVariantId]       = useState(null)
   const [editVariantValues, setEditVariantValues]     = useState({})
 
+  const mountedRef = useRef(true)
   const PER_PAGE = 10
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    load()
+    return () => { mountedRef.current = false }
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -59,6 +64,7 @@ export default function Products() {
       api.get('/api/products/all'),
       api.get('/api/categories'),
     ])
+    if (!mountedRef.current) return
     setProducts(pr.data?.products ?? pr.data ?? [])
     setCategories(cr.data || [])
     setLoading(false)
