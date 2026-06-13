@@ -3,6 +3,7 @@ import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Input, Select, Card, Pagination, formatPrice } from '../components/ui/index'
 import api from '../config/api'
 import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag } from 'lucide-react'
+import RichTextEditor from '../components/ui/RichTextEditor'
 
 // ── Category intelligence: auto-suggest variant product for apparel/footwear
 const VARIANT_CATEGORY_KEYWORDS = ['fashion', 'wear', 'clothing', 'footwear', 'apparel', 'shoes', 'sandals', 'sneakers', 'saree', 'kurti', 'kids']
@@ -349,10 +350,11 @@ export default function Products() {
 
           <div className="col-span-2">
             <label className="text-xs font-semibold text-slate-600 mb-1 block">Description</label>
-            <textarea value={form.description}
-              onChange={e => setForm({...form, description: e.target.value})}
-              rows={3} placeholder="Enter product description..."
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:border-teal-500" />
+            <RichTextEditor
+              value={form.description}
+              onChange={val => setForm({...form, description: val})}
+              placeholder="Enter product description — use the toolbar to format text, add headings, bullet points and more..."
+            />
           </div>
 
           {/* Product Images */}
