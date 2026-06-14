@@ -66,7 +66,7 @@ export default function Products() {
     ])
     if (!mountedRef.current) return
     setProducts(pr.data?.products ?? pr.data ?? [])
-    setCategories(cr.data || [])
+    setCategories(cr.data?._list ?? cr.data ?? [])
     setLoading(false)
   }
 

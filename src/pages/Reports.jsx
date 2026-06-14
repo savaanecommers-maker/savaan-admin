@@ -45,7 +45,7 @@ export default function Reports() {
     setTotal(or.data?.total ?? sorted.length)
     setPage(p)
     setProducts(pr.data?.products ?? pr.data ?? [])
-    setCategories(cr.data || [])
+    setCategories(cr.data?._list ?? cr.data ?? [])
     setLoading(false)
   }
 
