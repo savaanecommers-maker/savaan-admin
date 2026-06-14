@@ -140,7 +140,7 @@ export default function Categories() {
     setLoading(true)
     const { data } = await api.get('/api/categories?all=1')
     if (!mountedRef.current) return
-    const sorted = (data || []).sort((a, b) => {
+    const sorted = (data?._list ?? data ?? []).sort((a, b) => {
       if (a.display_order !== b.display_order) return a.display_order - b.display_order
       return a.name.localeCompare(b.name)
     })
@@ -165,7 +165,7 @@ export default function Categories() {
     setLoadingSubs(true)
     try {
       const { data } = await api.get(`/api/categories/${parentId}/subcategories?all=1`)
-      setSubcats(data || [])
+      setSubcats(data?._list ?? data ?? [])
     } finally {
       setLoadingSubs(false)
     }
