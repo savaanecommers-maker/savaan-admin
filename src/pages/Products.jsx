@@ -20,10 +20,33 @@ const SIZE_PRESETS = {
   tops:     ['28', '30', '32', '34', '36', '38', '40', '42'],
 }
 
+// Category-specific attribute options (matches Flutter filter panel)
+const CATEGORY_ATTRIBUTES = {
+  fashion:              { Gender: ['Men','Women','Unisex','Boys','Girls'], Material: ['Cotton','Polyester','Silk','Linen','Denim','Leather','Wool'] },
+  footwear:             { Gender: ['Men','Women','Unisex','Boys','Girls'], Material: ['Leather','Canvas','Synthetic','Rubber','Suede'], Closure: ['Lace-up','Slip-on','Velcro','Buckle'] },
+  watches:              { Gender: ['Men','Women','Unisex'], 'Strap Material': ['Leather','Metal','Rubber','Silicone','Mesh'], 'Dial Shape': ['Round','Square','Rectangle','Oval'], Features: ['Water Resistant','Chronograph','Automatic','Smart','Quartz'] },
+  perfumes:             { Gender: ['Men','Women','Unisex'], 'Fragrance Family': ['Floral','Woody','Oriental','Fresh','Citrus','Aquatic','Musky'], Volume: ['30ml','50ml','75ml','100ml','200ml'] },
+  electronics:          { Storage: ['64GB','128GB','256GB','512GB'], RAM: ['4GB','6GB','8GB','12GB','16GB'], Features: ['Wireless','Bluetooth','WiFi','Fast Charging','USB-C'] },
+  beauty:               { 'Skin Type': ['Oily','Dry','Combination','Sensitive','All'], Formulation: ['Cream','Serum','Gel','Oil','Powder'] },
+  'home-decor':         { Style: ['Modern','Traditional','Bohemian','Minimalist','Rustic'], Room: ['Living Room','Bedroom','Kitchen','Bathroom','Office'] },
+  'jewelry-accessories':{ Gender: ['Men','Women','Unisex'], 'Metal Type': ['Gold','Silver','Rose Gold','Platinum','Brass'], Stone: ['Diamond','Ruby','Emerald','Sapphire','Pearl','None'] },
+  'bags-luggage':       { Gender: ['Men','Women','Unisex'], Type: ['Backpack','Handbag','Tote','Clutch','Wallet','Luggage'], Material: ['Leather','Canvas','Nylon','Polyester'] },
+  'health-wellness':    { Form: ['Tablet','Capsule','Liquid','Powder','Cream'], Benefits: ['Immunity','Energy','Sleep','Weight','Skin','Hair'] },
+  'mobiles-accessories':{ OS: ['Android','iOS','Other'], Features: ['5G','Wireless Charging','Fast Charging','Foldable'] },
+  'seasonal-collections':{ Season: ['Summer','Winter','Monsoon','Festive'], Gender: ['Men','Women','Unisex','Kids'] },
+}
+
+function getCategoryAttrs(catName = '') {
+  const lower = catName.toLowerCase()
+  const key = Object.keys(CATEGORY_ATTRIBUTES).find(k => lower.includes(k.split('-')[0]))
+  return key ? CATEGORY_ATTRIBUTES[key] : {}
+}
+
 const EMPTY = {
   name: '', sku: '', category_id: '', brand: '', description: '',
   price: '', original_price: '', stock: 0, is_featured: false,
   is_flash_deal: false, is_staff_pick: false, images: [], has_variants: false,
+  attributes: [],
 }
 
 export default function Products() {
@@ -96,6 +119,7 @@ export default function Products() {
       original_price: p.original_price?.toString() || '',
       images: p.images || [],
       has_variants: p.has_variants || false,
+      attributes: Array.isArray(p.attributes) ? p.attributes : [],
     })
     setModal(true)
   }
@@ -115,6 +139,7 @@ export default function Products() {
       has_variants:  form.has_variants,
       images: form.images,
       image_url: form.images?.[0] || null,
+      attributes: (form.attributes || []).length > 0 ? form.attributes : null,
     }
     let res
     if (editing) {
@@ -487,6 +512,52 @@ export default function Products() {
               </label>
             ))}
           </div>
+
+          {/* Product Attributes (filter tags) */}
+          {(() => {
+            const cat = categories.find(c => c.id === form.category_id)
+            const attrs = getCategoryAttrs(cat?.name || '')
+            const groups = Object.entries(attrs)
+            if (groups.length === 0) return null
+            return (
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-600 mb-2 block">
+                  Product Attributes <span className="text-slate-400 font-normal">(used by filters in the app)</span>
+                </label>
+                <div className="space-y-3 border border-slate-200 rounded-xl p-3 bg-slate-50">
+                  {groups.map(([group, values]) => (
+                    <div key={group}>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">{group}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {values.map(val => {
+                          const checked = (form.attributes || []).includes(val)
+                          return (
+                            <label key={val}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+                                checked
+                                  ? 'bg-teal-50 border-teal-400 text-teal-700'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                              }`}>
+                              <input type="checkbox" className="hidden" checked={checked}
+                                onChange={() => {
+                                  const cur = form.attributes || []
+                                  setForm(f => ({
+                                    ...f,
+                                    attributes: checked ? cur.filter(a => a !== val) : [...cur, val],
+                                  }))
+                                }} />
+                              {checked && <span className="text-teal-500">✓</span>}
+                              {val}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">

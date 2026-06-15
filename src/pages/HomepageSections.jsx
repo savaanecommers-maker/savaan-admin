@@ -110,7 +110,8 @@ export default function HomepageSections() {
         api.get('/api/homepage/analytics/summary').catch(() => ({ data: [] })),
       ])
       if (!mountedRef.current) return
-      const data = Array.isArray(sr.data) ? sr.data : []
+      const raw  = sr.data?._list ?? sr.data
+      const data = Array.isArray(raw) ? raw : []
       setSections(data.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)))
       setAnalytics(Array.isArray(ar.data) ? ar.data : [])
     } catch {
