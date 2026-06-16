@@ -59,7 +59,7 @@ export default function Orders() {
     shipped:           ['out_for_delivery'],
     out_for_delivery:  ['delivered'],
     delivered:         ['return_requested'],
-    return_requested:  ['returned', 'confirmed'],
+    return_requested:  ['returned'],
     cancelled:         [],
     returned:          [],
   }

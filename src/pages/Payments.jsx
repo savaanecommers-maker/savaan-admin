@@ -65,7 +65,7 @@ export default function Payments() {
       alert('Verify failed: ' + (res.error.message || res.error))
     } else {
       setOrders(prev => prev.map(o => o.id === orderId
-        ? { ...o, payment_status: 'paid', status: 'confirmed' } : o))
+        ? { ...o, payment_status: 'success', status: 'confirmed' } : o))
     }
     setActionId(null)
   }
@@ -92,7 +92,10 @@ export default function Payments() {
       o.email?.toLowerCase().includes(search.toLowerCase()) ||
       o.payment_reference?.toLowerCase().includes(search.toLowerCase())
     const matchMethod = method === 'all' || o.payment_method === method
-    const matchStatus = status === 'all' || paymentStatus(o).toLowerCase() === status
+    const matchStatus = status === 'all' ||
+      (status === 'paid' && (o.payment_status === 'success' || o.payment_status === 'paid')) ||
+      (status === 'cod' && o.payment_method === 'cod') ||
+      (status !== 'paid' && status !== 'cod' && o.payment_status === status)
     return matchSearch && matchMethod && matchStatus
   })
 
