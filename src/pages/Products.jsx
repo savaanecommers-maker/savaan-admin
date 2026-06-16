@@ -98,6 +98,7 @@ export default function Products() {
   const [form, setForm]             = useState(EMPTY)
   const [saving, setSaving]         = useState(false)
   const [uploading, setUploading]   = useState(false)
+  const dragIdx = useRef(null)
 
   // Variant modal state
   const [variantModal, setVariantModal]               = useState(false)
@@ -430,10 +431,26 @@ export default function Products() {
             <label className="text-xs font-semibold text-slate-600 mb-2 block">Product Images</label>
             <div className="flex flex-wrap gap-2 mb-2">
               {(form.images || []).map((url, i) => (
-                <div key={i} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-slate-200">
+                <div key={url + i}
+                  draggable
+                  onDragStart={() => { dragIdx.current = i }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => {
+                    const from = dragIdx.current
+                    if (from === null || from === i) return
+                    const imgs = [...form.images]
+                    imgs.splice(i, 0, imgs.splice(from, 1)[0])
+                    setForm(prev => ({ ...prev, images: imgs }))
+                    dragIdx.current = null
+                  }}
+                  onDragEnd={() => { dragIdx.current = null }}
+                  className="relative group w-16 h-16 rounded-lg overflow-hidden border border-slate-200 cursor-grab active:cursor-grabbing">
+                  {i === 0 && (
+                    <span className="absolute top-0 left-0 z-10 bg-teal-500 text-white text-[8px] font-bold px-1 rounded-br">Main</span>
+                  )}
                   <img src={url} alt="" className="w-full h-full object-cover" />
                   <button type="button"
-                    onClick={() => setForm({ ...form, images: form.images.filter((_, idx) => idx !== i) })}
+                    onClick={() => setForm(prev => ({ ...prev, images: prev.images.filter((_, idx) => idx !== i) }))}
                     className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <X size={14} className="text-white" />
                   </button>
