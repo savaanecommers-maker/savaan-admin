@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Input, Select, Card, Pagination, formatPrice } from '../components/ui/index'
 import api from '../config/api'
-import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag, Link } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag } from 'lucide-react'
 import RichTextEditor from '../components/ui/RichTextEditor'
 
 // ── Category intelligence: auto-suggest variant product for apparel/footwear
@@ -100,14 +100,6 @@ export default function Products() {
   const [uploading, setUploading]   = useState(false)
   const dragIdx = useRef(null)
 
-  // Import from URL state
-  const [importModal, setImportModal] = useState(false)
-  const [importUrl, setImportUrl]     = useState('')
-  const [importLoading, setImportLoading] = useState(false)
-  const [importError, setImportError] = useState('')
-  const [importTab, setImportTab]     = useState('url') // 'url' | 'html'
-  const [importHtml, setImportHtml]   = useState('')
-
   // Variant modal state
   const [variantModal, setVariantModal]               = useState(false)
   const [variantProductId, setVariantProductId]       = useState(null)
@@ -155,66 +147,6 @@ export default function Products() {
 
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
-
-  async function importFromUrl(providedHtml = null) {
-    const urlToUse = importUrl.trim()
-    if (!urlToUse && !providedHtml) return
-    if (importTab === 'html' && !importHtml.trim()) {
-      setImportError('Please paste the page HTML first')
-      return
-    }
-    if (importTab === 'html' && !urlToUse) {
-      setImportError('Please also enter the product URL so we know which site it is from')
-      return
-    }
-    if (!urlToUse) return
-    setImportLoading(true)
-    setImportError('')
-    try {
-      const payload = { url: urlToUse }
-      if (importTab === 'html') payload.html = importHtml.trim()
-      else if (providedHtml) payload.html = providedHtml
-
-      const { data, error } = await api.post('/api/scraper/scrape', payload)
-
-      // Site blocked our server — fetch HTML from the user's browser instead
-      if (data?.error === 'blocked' || (error && error.toString().includes('blocked'))) {
-        setImportLoading(false)
-        setImportError('⚡ This site blocks bots. Fetching via your browser...')
-        try {
-          const resp = await fetch(importUrl.trim(), {
-            headers: { 'Accept': 'text/html' },
-            mode: 'no-cors',
-          })
-          // no-cors returns opaque response — use iframe approach
-          setImportError('This website cannot be scraped automatically. Please try another product URL or enter details manually.')
-        } catch {
-          setImportError('This website cannot be scraped automatically. Please try another product URL or enter details manually.')
-        }
-        return
-      }
-
-      if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Scrape failed')
-
-      setEditing(null)
-      setForm({
-        ...EMPTY,
-        name:           data.name || '',
-        brand:          data.brand || '',
-        price:          data.price?.toString() || '',
-        original_price: data.original_price?.toString() || '',
-        description:    data.description || '',
-        images:         data.images || [],
-      })
-      setImportModal(false)
-      setImportUrl('')
-      setModal(true)
-    } catch (err) {
-      setImportError(err.message)
-    } finally {
-      setImportLoading(false)
-    }
-  }
 
   function openAdd() { setEditing(null); setForm(EMPTY); setModal(true) }
   function openEdit(p) {
@@ -448,9 +380,6 @@ export default function Products() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="secondary" icon={Download} size="sm">Export</Button>
-            <Button variant="secondary" icon={Link} size="sm" onClick={() => { setImportError(''); setImportUrl(''); setImportModal(true) }}>
-              Import from URL
-            </Button>
             <Button icon={Plus} size="sm" onClick={openAdd}>Add Product</Button>
           </div>
         </div>
@@ -699,96 +628,6 @@ export default function Products() {
               ? 'Save & Set Up Variants →'
               : editing ? 'Save Changes' : 'Add Product'}
           </Button>
-        </div>
-      </Modal>
-
-      {/* ── Import from URL Modal ──────────────────────────────── */}
-      <Modal open={importModal} onClose={() => setImportModal(false)} title="Import Product" width="max-w-lg">
-        <div className="space-y-4">
-
-          {/* Tabs */}
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-            {[['url', '🔗 Paste URL', 'Auto-fetch (may be blocked by some sites)'],
-              ['html', '📋 Paste HTML', 'Works on all sites including Lifestyle']].map(([val, label, hint]) => (
-              <button key={val} onClick={() => { setImportTab(val); setImportError('') }}
-                className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all text-left ${
-                  importTab === val ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
-                }`}>
-                <p>{label}</p>
-                <p className="text-[10px] font-normal opacity-70">{hint}</p>
-              </button>
-            ))}
-          </div>
-
-          {/* URL tab */}
-          {importTab === 'url' && (
-            <>
-              <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 space-y-1">
-                <p className="font-semibold text-slate-700 mb-1.5">Supported stores:</p>
-                {['Lifestyle', 'Croma', 'HomeCenter', 'Reliance Digital', 'Shoppers Stop'].map(s => (
-                  <p key={s} className="flex items-center gap-1.5"><span className="text-teal-500">✓</span> {s}</p>
-                ))}
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Product Page URL</label>
-                <input value={importUrl} onChange={e => setImportUrl(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !importLoading && importFromUrl()}
-                  placeholder="https://www.croma.com/product/..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500"
-                  disabled={importLoading} />
-                <p className="text-[10px] text-slate-400 mt-1">Paste a direct product page URL — not a category or search page</p>
-              </div>
-            </>
-          )}
-
-          {/* Paste HTML tab */}
-          {importTab === 'html' && (
-            <>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-slate-700 space-y-1.5">
-                <p className="font-semibold text-amber-800">How to use (for Lifestyle & blocked sites):</p>
-                <p>1. Open the product page in Chrome</p>
-                <p>2. Press <kbd className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+U</kbd> to view page source</p>
-                <p>3. Press <kbd className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+A</kbd> then <kbd className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+C</kbd> to copy all</p>
-                <p>4. Paste below</p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Product Page URL <span className="text-slate-400 font-normal">(so we know which site)</span></label>
-                <input value={importUrl} onChange={e => setImportUrl(e.target.value)}
-                  placeholder="https://www.lifestylestores.com/in/en/..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500 mb-3"
-                  disabled={importLoading} />
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Paste Page Source HTML</label>
-                <textarea value={importHtml} onChange={e => setImportHtml(e.target.value)}
-                  placeholder="Paste the full page source HTML here..."
-                  rows={6}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-teal-500 font-mono resize-none"
-                  disabled={importLoading} />
-              </div>
-            </>
-          )}
-
-          {importError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
-              {importError}
-            </div>
-          )}
-
-          {importLoading && (
-            <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
-              <Loader size={16} className="text-teal-600 animate-spin flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-teal-700">Importing product...</p>
-                <p className="text-xs text-teal-600">Extracting details and enhancing description with AI</p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <Button variant="secondary" onClick={() => setImportModal(false)} disabled={importLoading}>Cancel</Button>
-            <Button onClick={() => importFromUrl()} disabled={importLoading || !importUrl.trim()} icon={importLoading ? Loader : Link}>
-              {importLoading ? 'Importing...' : 'Import & Fill Form'}
-            </Button>
-          </div>
         </div>
       </Modal>
 
