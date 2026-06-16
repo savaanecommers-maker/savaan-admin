@@ -36,10 +36,47 @@ const CATEGORY_ATTRIBUTES = {
   'seasonal-collections':{ Season: ['Summer','Winter','Monsoon','Festive'], Gender: ['Men','Women','Unisex','Kids'] },
 }
 
-function getCategoryAttrs(catName = '') {
-  const lower = catName.toLowerCase()
-  const key = Object.keys(CATEGORY_ATTRIBUTES).find(k => lower.includes(k.split('-')[0]))
-  return key ? CATEGORY_ATTRIBUTES[key] : {}
+// Map a category slug (or parent slug) to a CATEGORY_ATTRIBUTES key
+function slugToAttrKey(slug = '') {
+  const s = slug.toLowerCase()
+  if (s.startsWith('fashion') || s.includes('clothing') || s.includes('apparel') ||
+      s.includes('kurta') || s.includes('saree') || s.includes('shirts') ||
+      s.includes('dresses') || s.includes('trousers') || s.includes('tops') ||
+      s.includes('jeans') || s.includes('mens-') || s.includes('womens-') ||
+      s.includes('boys-') || s.includes('girls-') || s.includes('kids-fashion')) return 'fashion'
+  if (s.startsWith('footwear') || s.includes('shoes') || s.includes('sneakers') ||
+      s.includes('boots') || s.includes('sandals') || s.includes('slippers') ||
+      s.includes('heels') || s.includes('loafers') || s.includes('flip-flops')) return 'footwear'
+  if (s.startsWith('watches') || s.includes('watch')) return 'watches'
+  if (s.startsWith('perfumes') || s.includes('fragrance') || s.includes('cologne') ||
+      s.includes('attar') || s.includes('deodorant')) return 'perfumes'
+  if (s.startsWith('jewelry') || s.includes('rings') || s.includes('necklace') ||
+      s.includes('bracelet') || s.includes('earring') || s.includes('pendant') ||
+      s.includes('bangles') || s.includes('chains') || s.includes('wallets') ||
+      s.includes('belts')) return 'jewelry-accessories'
+  if (s.startsWith('bags') || s.includes('luggage') || s.includes('handbag') ||
+      s.includes('backpack') || s.includes('trolley') || s.includes('travel-bag') ||
+      s.includes('laptop-bag')) return 'bags-luggage'
+  if (s.startsWith('beauty') || s.includes('skincare') || s.includes('makeup') ||
+      s.includes('hair-care') || s.includes('moistur') || s.includes('personal-care')) return 'beauty'
+  if (s.startsWith('mobiles') || s.includes('mobile-phones') || s.includes('smartphones') ||
+      s.includes('chargers') || s.includes('power-bank') || s.includes('cases-covers')) return 'mobiles-accessories'
+  if (s.startsWith('electronics') || s.includes('laptops') || s.includes('headphones') ||
+      s.includes('tablets') || s.includes('cameras') || s.includes('speakers') ||
+      s.includes('television')) return 'electronics'
+  if (s.startsWith('home-decor') || s.includes('furniture') || s.includes('decorative') ||
+      s.includes('clocks') || s.includes('lighting') || s.includes('bedding')) return 'home-decor'
+  if (s.startsWith('health') || s.includes('wellness') || s.includes('vitamins') ||
+      s.includes('supplements') || s.includes('nutrition') || s.includes('fitness')) return 'health-wellness'
+  if (s.startsWith('seasonal') || s.includes('festival') || s.includes('summer-') ||
+      s.includes('winter-') || s.includes('monsoon') || s.includes('festive')) return 'seasonal-collections'
+  return null
+}
+
+// Check category slug first, then parent category slug
+function getCategoryAttrs(catSlug = '', parentSlug = '') {
+  const key = slugToAttrKey(catSlug) || slugToAttrKey(parentSlug)
+  return key ? (CATEGORY_ATTRIBUTES[key] || {}) : {}
 }
 
 const EMPTY = {
@@ -404,21 +441,27 @@ export default function Products() {
               ))}
               <label className={`w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-teal-400 transition-colors ${uploading ? 'opacity-50 cursor-wait' : ''}`}>
                 {uploading ? <Loader size={16} className="text-slate-400 animate-spin" /> : <Upload size={16} className="text-slate-400" />}
-                <span className="text-[9px] text-slate-400 mt-1">{uploading ? 'Uploading' : 'Upload'}</span>
-                <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                <span className="text-[9px] text-slate-400 mt-1">{uploading ? 'Uploading…' : 'Upload'}</span>
+                <input type="file" accept="image/*" multiple className="hidden" disabled={uploading}
                   onChange={async e => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
+                    const files = Array.from(e.target.files || [])
+                    if (!files.length) return
                     setUploading(true)
                     try {
-                      const fd = new FormData()
-                      fd.append('file', file)
-                      const { data, error } = await api.upload('/api/upload?folder=products', fd)
-                      if (error) throw new Error(error)
-                      setForm(prev => ({ ...prev, images: [...(prev.images || []), data.url] }))
+                      const urls = await Promise.all(files.map(async file => {
+                        const fd = new FormData()
+                        fd.append('file', file)
+                        const { data, error } = await api.upload('/api/upload?folder=products', fd)
+                        if (error) throw new Error(error)
+                        return data.url
+                      }))
+                      setForm(prev => ({ ...prev, images: [...(prev.images || []), ...urls] }))
                     } catch (err) {
                       alert('Upload failed: ' + err.message)
-                    } finally { setUploading(false) }
+                    } finally {
+                      setUploading(false)
+                      e.target.value = ''
+                    }
                   }} />
               </label>
             </div>
@@ -516,7 +559,8 @@ export default function Products() {
           {/* Product Attributes (filter tags) */}
           {(() => {
             const cat = categories.find(c => c.id === form.category_id)
-            const attrs = getCategoryAttrs(cat?.name || '')
+            const parentCat = cat?.parent_id ? categories.find(c => c.id === cat.parent_id) : null
+            const attrs = getCategoryAttrs(cat?.slug || '', parentCat?.slug || '')
             const groups = Object.entries(attrs)
             if (groups.length === 0) return null
             return (
