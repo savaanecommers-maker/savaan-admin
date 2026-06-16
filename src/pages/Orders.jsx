@@ -51,6 +51,19 @@ export default function Orders() {
   const paginated = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
 
+  const STATUS_TRANSITIONS = {
+    pending:           ['confirmed', 'cancelled'],
+    confirmed:         ['packed', 'cancelled'],
+    processing:        ['packed', 'cancelled'],
+    packed:            ['shipped'],
+    shipped:           ['out_for_delivery'],
+    out_for_delivery:  ['delivered'],
+    delivered:         ['return_requested'],
+    return_requested:  ['returned', 'confirmed'],
+    cancelled:         [],
+    returned:          [],
+  }
+
   async function updateStatus(orderId, newStatus) {
     setUpdating(true)
     const res = await api.put(`/api/orders/${orderId}/status`, { status: newStatus })
@@ -140,11 +153,13 @@ export default function Orders() {
                   value={o.status}
                   key={o.status}
                   onChange={e => updateStatus(o.id, e.target.value)}
-                  disabled={updating}
-                  className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500"
+                  disabled={updating || !(STATUS_TRANSITIONS[o.status]?.length > 0)}
+                  className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {['pending','confirmed','processing','packed','shipped','out_for_delivery','delivered','cancelled','return_requested','returned']
-                    .map(s => <option key={s} value={s} className="capitalize">{s.replace(/_/g,' ')}</option>)}
+                  <option value={o.status}>{o.status.replace(/_/g,' ')}</option>
+                  {(STATUS_TRANSITIONS[o.status] || []).map(s => (
+                    <option key={s} value={s} className="capitalize">{s.replace(/_/g,' ')}</option>
+                  ))}
                 </select>
               </div>
 

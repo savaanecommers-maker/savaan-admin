@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Input, Select, Card, Pagination, formatPrice } from '../components/ui/index'
 import api from '../config/api'
-import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag, Link } from 'lucide-react'
 import RichTextEditor from '../components/ui/RichTextEditor'
 
 // ── Category intelligence: auto-suggest variant product for apparel/footwear
@@ -100,6 +100,12 @@ export default function Products() {
   const [uploading, setUploading]   = useState(false)
   const dragIdx = useRef(null)
 
+  // Import from URL state
+  const [importModal, setImportModal] = useState(false)
+  const [importUrl, setImportUrl]     = useState('')
+  const [importLoading, setImportLoading] = useState(false)
+  const [importError, setImportError] = useState('')
+
   // Variant modal state
   const [variantModal, setVariantModal]               = useState(false)
   const [variantProductId, setVariantProductId]       = useState(null)
@@ -147,6 +153,34 @@ export default function Products() {
 
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
+
+  async function importFromUrl() {
+    if (!importUrl.trim()) return
+    setImportLoading(true)
+    setImportError('')
+    try {
+      const { data, error } = await api.post('/api/scraper/scrape', { url: importUrl.trim() })
+      if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Scrape failed')
+      // Pre-fill the product form with scraped data
+      setEditing(null)
+      setForm({
+        ...EMPTY,
+        name:           data.name || '',
+        brand:          data.brand || '',
+        price:          data.price?.toString() || '',
+        original_price: data.original_price?.toString() || '',
+        description:    data.description || '',
+        images:         data.images || [],
+      })
+      setImportModal(false)
+      setImportUrl('')
+      setModal(true)
+    } catch (err) {
+      setImportError(err.message)
+    } finally {
+      setImportLoading(false)
+    }
+  }
 
   function openAdd() { setEditing(null); setForm(EMPTY); setModal(true) }
   function openEdit(p) {
@@ -380,6 +414,9 @@ export default function Products() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="secondary" icon={Download} size="sm">Export</Button>
+            <Button variant="secondary" icon={Link} size="sm" onClick={() => { setImportError(''); setImportUrl(''); setImportModal(true) }}>
+              Import from URL
+            </Button>
             <Button icon={Plus} size="sm" onClick={openAdd}>Add Product</Button>
           </div>
         </div>
@@ -628,6 +665,56 @@ export default function Products() {
               ? 'Save & Set Up Variants →'
               : editing ? 'Save Changes' : 'Add Product'}
           </Button>
+        </div>
+      </Modal>
+
+      {/* ── Import from URL Modal ──────────────────────────────── */}
+      <Modal open={importModal} onClose={() => setImportModal(false)} title="Import Product from URL" width="max-w-lg">
+        <div className="space-y-4">
+          <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 space-y-1">
+            <p className="font-semibold text-slate-700 mb-2">Supported stores:</p>
+            {['Lifestyle (lifestyle.co.in)', 'Croma (croma.com)', 'HomeCenter (homecenter.co.in)', 'Reliance Digital (reliancedigital.in)', 'Shoppers Stop (shoppersstop.com)'].map(s => (
+              <p key={s} className="flex items-center gap-1.5">
+                <span className="text-teal-500">✓</span> {s}
+              </p>
+            ))}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Product Page URL</label>
+            <input
+              value={importUrl}
+              onChange={e => setImportUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !importLoading && importFromUrl()}
+              placeholder="https://www.lifestyle.co.in/product/..."
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500"
+              disabled={importLoading}
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Paste a direct product page URL — not a category or search page</p>
+          </div>
+
+          {importError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
+              {importError}
+            </div>
+          )}
+
+          {importLoading && (
+            <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
+              <Loader size={16} className="text-teal-600 animate-spin flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-teal-700">Importing product...</p>
+                <p className="text-xs text-teal-600">Fetching details and enhancing description with AI</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <Button variant="secondary" onClick={() => setImportModal(false)} disabled={importLoading}>Cancel</Button>
+            <Button onClick={importFromUrl} disabled={importLoading || !importUrl.trim()} icon={importLoading ? Loader : Link}>
+              {importLoading ? 'Importing...' : 'Import & Fill Form'}
+            </Button>
+          </div>
         </div>
       </Modal>
 
