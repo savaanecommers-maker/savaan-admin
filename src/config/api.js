@@ -51,8 +51,6 @@ async function refreshAccessToken() {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 20000
-
 async function request(method, path, body, isFormData = false) {
   let token = getToken()
   const makeRequest = async (t) => {
