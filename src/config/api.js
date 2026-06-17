@@ -34,30 +34,48 @@ async function refreshAccessToken() {
   return data.access_token
 }
 
+const REQUEST_TIMEOUT_MS = 20000
+
 async function request(method, path, body, isFormData = false) {
   let token = getToken()
   const makeRequest = async (t) => {
     const headers = {}
     if (t) headers['Authorization'] = `Bearer ${t}`
     if (!isFormData) headers['Content-Type'] = 'application/json'
-    return fetch(`${BASE_URL}${path}`, {
-      method,
-      headers,
-      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
-    })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      return await fetch(`${BASE_URL}${path}`, {
+        method,
+        headers,
+        signal: controller.signal,
+        body: isFormData ? body : body ? JSON.stringify(body) : undefined,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
-  let res = await makeRequest(token)
+  let res
+  try {
+    res = await makeRequest(token)
+  } catch (e) {
+    if (e.name === 'AbortError') return { data: null, error: { message: 'Request timed out. Please try again.' } }
+    return { data: null, error: { message: 'Network error. Check your connection.' } }
+  }
+
   if (res.status === 401) {
-    // Read the actual error body first
     const errJson = await res.json().catch(() => ({}))
-    // Try refresh once
     token = await refreshAccessToken()
     if (!token) {
-      // Show the real error (e.g. "Invalid email or password") not the generic message
       return { data: null, error: { message: errJson.error || 'Session expired. Please log in again.' } }
     }
-    res = await makeRequest(token)
+    try {
+      res = await makeRequest(token)
+    } catch (e) {
+      if (e.name === 'AbortError') return { data: null, error: { message: 'Request timed out.' } }
+      return { data: null, error: { message: 'Network error.' } }
+    }
   }
 
   const json = await res.json().catch(() => ({}))
