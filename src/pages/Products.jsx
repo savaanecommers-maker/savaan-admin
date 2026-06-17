@@ -432,6 +432,34 @@ export default function Products() {
     },
   ]
 
+  // ── Export filtered products as CSV
+  function exportCSV() {
+    const rows = filtered
+    const headers = ['ID', 'Name', 'Category', 'Price', 'Sale Price', 'Stock', 'SKU', 'Status', 'Flash Deal', 'Staff Pick']
+    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = [
+      headers.join(','),
+      ...rows.map(p => [
+        p.id, p.name,
+        p.category_name ?? '',
+        p.price ?? '',
+        p.sale_price ?? '',
+        p.stock ?? 0,
+        p.sku ?? '',
+        p.is_active ? 'Active' : 'Inactive',
+        p.is_flash_deal ? 'Yes' : 'No',
+        p.is_staff_pick ? 'Yes' : 'No',
+      ].map(escape).join(',')),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `savaan-products-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Total variant stock
   const totalVariantStock = variants.reduce((s, v) => s + (parseInt(v.stock) || 0), 0)
 
@@ -451,7 +479,7 @@ export default function Products() {
               className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500" />
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="secondary" icon={Download} size="sm">Export</Button>
+            <Button variant="secondary" icon={Download} size="sm" onClick={exportCSV}>Export</Button>
             <Button icon={Plus} size="sm" onClick={openAdd}>Add Product</Button>
           </div>
         </div>

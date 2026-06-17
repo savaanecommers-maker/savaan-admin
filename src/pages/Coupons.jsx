@@ -136,6 +136,7 @@ export default function Coupons() {
           <Input label="Max Uses" type="number" value={form.max_uses}
             onChange={e => setForm({...form, max_uses: e.target.value})} placeholder="e.g. 100" />
           <Input label="Expiry Date" type="date" value={form.expires_at?.split('T')[0] || ''}
+            min={new Date().toISOString().split('T')[0]}
             onChange={e => setForm({...form, expires_at: e.target.value})} />
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
