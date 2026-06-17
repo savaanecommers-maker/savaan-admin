@@ -9,12 +9,14 @@ const STATUSES = ['All','pending','confirmed','processing','packed','shipped','o
 export default function Orders() {
   const [orders, setOrders]   = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [status, setStatus]   = useState('All')
   const [search, setSearch]   = useState('')
   const [page, setPage]       = useState(1)
   const [selected, setSelected]   = useState(null)
   const [detailOrder, setDetail]  = useState(null)
   const [updating, setUpdating]   = useState(false)
+  const [confirmChange, setConfirmChange] = useState(null) // { orderId, newStatus }
   const mountedRef = useRef(true)
   const PER_PAGE = 10
 
@@ -26,10 +28,32 @@ export default function Orders() {
 
   async function load() {
     setLoading(true)
-    const { data } = await api.get('/api/orders?limit=500')
+    setLoadError(null)
+    const { data, error } = await api.get('/api/orders?limit=500')
     if (!mountedRef.current) return
+    if (error) { setLoadError('Failed to load orders. Please try again.'); setLoading(false); return }
     setOrders(data?.orders ?? data ?? [])
     setLoading(false)
+  }
+
+  function exportCSV() {
+    const rows = filtered
+    const header = ['Order ID','Date','Customer','Email','Phone','Payment','Status','Total']
+    const lines = rows.map(o => [
+      o.order_number,
+      formatDate(o.created_at),
+      o.full_name || '',
+      o.email || '',
+      o.phone || '',
+      o.payment_method || '',
+      o.status,
+      o.total,
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))
+    const csv = [header.join(','), ...lines].join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    a.download = `orders-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
   }
 
   async function openDetail(row) {
@@ -53,7 +77,7 @@ export default function Orders() {
 
   const STATUS_TRANSITIONS = {
     pending:           ['confirmed', 'cancelled'],
-    confirmed:         ['packed', 'cancelled'],
+    confirmed:         ['processing', 'packed', 'cancelled'],
     processing:        ['packed', 'cancelled'],
     packed:            ['shipped'],
     shipped:           ['out_for_delivery'],
@@ -64,7 +88,14 @@ export default function Orders() {
     returned:          [],
   }
 
-  async function updateStatus(orderId, newStatus) {
+  function requestStatusChange(orderId, newStatus) {
+    setConfirmChange({ orderId, newStatus })
+  }
+
+  async function confirmStatusChange() {
+    if (!confirmChange) return
+    const { orderId, newStatus } = confirmChange
+    setConfirmChange(null)
     setUpdating(true)
     const res = await api.put(`/api/orders/${orderId}/status`, { status: newStatus })
     setUpdating(false)
@@ -117,12 +148,14 @@ export default function Orders() {
                 placeholder="Search orders..."
                 className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-teal-500 w-44" />
             </div>
-            <Button variant="secondary" icon={Download} size="sm">Export</Button>
+            <Button variant="secondary" icon={Download} size="sm" onClick={exportCSV}>Export</Button>
           </div>
         </div>
 
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-sm">Loading orders...</div>
+        ) : loadError ? (
+          <div className="py-16 text-center text-red-500 text-sm">{loadError} <button onClick={load} className="underline ml-1">Retry</button></div>
         ) : (
           <>
             <Table columns={cols} data={paginated} onRow={openDetail} />
@@ -152,7 +185,7 @@ export default function Orders() {
                 <select
                   value={o.status}
                   key={o.status}
-                  onChange={e => updateStatus(o.id, e.target.value)}
+                  onChange={e => requestStatusChange(o.id, e.target.value)}
                   disabled={updating || !(STATUS_TRANSITIONS[o.status]?.length > 0)}
                   className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -231,6 +264,21 @@ export default function Orders() {
             </div>
           )
         })()}
+      </Modal>
+
+      {/* Status change confirmation */}
+      <Modal open={!!confirmChange} onClose={() => setConfirmChange(null)} title="Confirm Status Change" width="max-w-sm">
+        {confirmChange && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Change order status to <span className="font-semibold capitalize">{confirmChange.newStatus.replace(/_/g,' ')}</span>?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmChange(null)}>Cancel</Button>
+              <Button size="sm" onClick={confirmStatusChange}>Confirm</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </Layout>
   )

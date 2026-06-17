@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
-import { Card, Badge, Button, Modal, Select, Table, formatDate } from '../components/ui/index'
+import { Card, Badge, Button, Modal, Select, Table, Pagination, formatDate } from '../components/ui/index'
 import api from '../config/api'
 import { useAuth } from '../context/AuthContext'
 import { Users, User, Search, Mail, Phone, ShoppingBag, Shield, ShieldCheck, Edit2 } from 'lucide-react'
@@ -24,7 +24,10 @@ export default function AdminUsers() {
   const [selected, setSelected]   = useState(null)
   const [orders, setOrders]       = useState([])
   const [loading, setLoading]     = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [search, setSearch]       = useState('')
+  const [custPage, setCustPage]   = useState(1)
+  const CUST_PER_PAGE = 20
   const [adminModal, setAdminModal]     = useState(false)
   const [editingAdmin, setEditingAdmin] = useState(null)
   const [adminForm, setAdminForm] = useState({ role: 'customer_support', is_active: true })
@@ -40,12 +43,14 @@ export default function AdminUsers() {
 
   async function loadAll() {
     setLoading(true)
+    setLoadError(null)
     const [cr, ar, or] = await Promise.all([
       api.get('/api/users'),
       api.get('/api/admin/users'),
       api.get('/api/orders?limit=500'),
     ])
     if (!mountedRef.current) return
+    if (cr.error && ar.error) { setLoadError('Failed to load users. Please try again.'); setLoading(false); return }
     setCustomers(cr.data?.users ?? cr.data?._list ?? cr.data?.items ?? (Array.isArray(cr.data) ? cr.data : []))
     setAdmins(ar.data?._list ?? ar.data?.items ?? (Array.isArray(ar.data) ? ar.data : []))
     setAllOrders(or.data?.orders ?? or.data ?? [])
@@ -85,6 +90,9 @@ export default function AdminUsers() {
     a.email?.toLowerCase().includes(search.toLowerCase())
   )
   const thisMonth = customers.filter(c => new Date(c.created_at) > new Date(Date.now() - 30 * 86400000)).length
+  const isSuperAdmin = user?.role === 'super_admin'
+  const custPageinated = filteredCustomers.slice((custPage-1)*CUST_PER_PAGE, custPage*CUST_PER_PAGE)
+  const custTotalPages = Math.ceil(filteredCustomers.length / CUST_PER_PAGE)
 
   const customerCols = [
     {
@@ -136,6 +144,8 @@ export default function AdminUsers() {
       key: 'id', label: 'Actions',
       render: (v, row) => row.email === user?.email ? (
         <span className="text-xs text-slate-300">You</span>
+      ) : !isSuperAdmin ? (
+        <span className="text-xs text-slate-300">—</span>
       ) : (
         <div className="flex items-center gap-1">
           <button onClick={() => { setEditingAdmin(row); setAdminForm({ role: row.role, is_active: row.is_active }); setAdminModal(true) }}
@@ -170,7 +180,7 @@ export default function AdminUsers() {
           { label: 'Total Customers', value: customers.length,                         icon: Users },
           { label: 'New This Month',  value: thisMonth,                                 icon: User },
           { label: 'With Phone',      value: customers.filter(c => c.phone).length,    icon: Phone },
-          { label: 'Active',          value: customers.length,                         icon: Users },
+          { label: 'Active',          value: customers.filter(c => c.is_active !== false).length, icon: Users },
         ] : [
           { label: 'Total Admins',    value: admins.length,                                         icon: Shield },
           { label: 'Active',          value: admins.filter(a => a.is_active).length,               icon: ShieldCheck },
@@ -203,8 +213,17 @@ export default function AdminUsers() {
         </div>
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-sm">Loading...</div>
+        ) : loadError ? (
+          <div className="py-16 text-center text-red-500 text-sm">{loadError} <button onClick={loadAll} className="underline ml-1">Retry</button></div>
         ) : tab === 'customers' ? (
-          <Table columns={customerCols} data={filteredCustomers} onRow={openCustomer} />
+          <>
+            <Table columns={customerCols} data={custPageinated} onRow={openCustomer} />
+            {custTotalPages > 1 && (
+              <div className="px-4 pb-4 flex justify-end">
+                <Pagination page={custPage} totalPages={custTotalPages} onPage={setCustPage} />
+              </div>
+            )}
+          </>
         ) : (
           <Table columns={adminCols} data={filteredAdmins} />
         )}

@@ -7,6 +7,7 @@ import { Star, Trash2 } from 'lucide-react'
 export default function Reviews() {
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [filter, setFilter]   = useState('all')
   const [page, setPage]       = useState(1)
   const PER_PAGE = 10
@@ -21,8 +22,10 @@ export default function Reviews() {
 
   async function load() {
     setLoading(true)
-    const { data } = await api.get('/api/reviews/all')
+    setLoadError(null)
+    const { data, error } = await api.get('/api/reviews/all')
     if (!mountedRef.current) return
+    if (error) { setLoadError('Failed to load reviews. Please try again.'); setLoading(false); return }
     setReviews(data?.reviews ?? data ?? [])
     setLoading(false)
   }
@@ -126,6 +129,8 @@ export default function Reviews() {
         </div>
         {loading
           ? <div className="py-16 text-center text-slate-400 text-sm">Loading...</div>
+          : loadError
+          ? <div className="py-16 text-center text-red-500 text-sm">{loadError} <button onClick={load} className="underline ml-1">Retry</button></div>
           : <>
               <Table columns={cols} data={paginated} />
               <div className="px-4 pb-4 flex justify-end">

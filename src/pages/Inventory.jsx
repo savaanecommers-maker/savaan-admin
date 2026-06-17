@@ -12,6 +12,7 @@ const PER_PAGE = 20
 export default function Inventory() {
   const [products, setProducts]   = useState([])
   const [loading, setLoading]     = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [search, setSearch]       = useState('')
   const [filter, setFilter]       = useState('all')
   const [page, setPage]           = useState(1)
@@ -32,8 +33,10 @@ export default function Inventory() {
 
   async function load() {
     setLoading(true)
-    const { data } = await api.get('/api/products/all')
+    setLoadError(null)
+    const { data, error } = await api.get('/api/products/all')
     if (!mountedRef.current) return
+    if (error) { setLoadError('Failed to load inventory. Please try again.'); setLoading(false); return }
     const list = data?.products ?? data ?? []
     const sorted = list.sort((a, b) => (a.stock || 0) - (b.stock || 0))
     setProducts(sorted)
@@ -188,6 +191,8 @@ export default function Inventory() {
         </div>
         {loading
           ? <div className="py-16 text-center text-slate-400 text-sm">Loading inventory...</div>
+          : loadError
+          ? <div className="py-16 text-center text-red-500 text-sm">{loadError} <button onClick={load} className="underline ml-1">Retry</button></div>
           : (
             <>
               <Table columns={cols} data={paginated} />
