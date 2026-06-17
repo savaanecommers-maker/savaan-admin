@@ -632,7 +632,7 @@ export default function Products() {
       </Modal>
 
       {/* ── Variants Modal ──────────────────────────────────────── */}
-      <Modal open={variantModal} onClose={() => setVariantModal(false)}
+      <Modal open={variantModal} onClose={() => { setVariantModal(false); load() }}
         title={`Variants — ${variantProductName}`} width="max-w-2xl">
 
         {/* Preset quick-add buttons */}
