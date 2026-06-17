@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Table, Badge, Button, Modal, Input, Select, Card, Pagination, formatPrice } from '../components/ui/index'
 import api from '../config/api'
-import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Package, Upload, X, Loader, Layers, ShoppingBag, Copy, ToggleLeft, ToggleRight, Image } from 'lucide-react'
 import RichTextEditor from '../components/ui/RichTextEditor'
 
 // ── Category intelligence: auto-suggest variant product for apparel/footwear
@@ -104,11 +104,14 @@ export default function Products() {
   const [variantModal, setVariantModal]               = useState(false)
   const [variantProductId, setVariantProductId]       = useState(null)
   const [variantProductName, setVariantProductName]   = useState('')
+  const [variantCategoryName, setVariantCategoryName] = useState('')
   const [variants, setVariants]                       = useState([])
-  const [variantForm, setVariantForm]                 = useState({ color: '', size: '', stock: 0, price: '' })
+  const EMPTY_VARIANT = { variant_name: '', color: '', size: '', stock: 0, price: '', sale_price: '', sku: '', status: 'active', images: [], attributes: {} }
+  const [variantForm, setVariantForm]                 = useState(EMPTY_VARIANT)
   const [savingVariant, setSavingVariant]             = useState(false)
   const [editingVariantId, setEditingVariantId]       = useState(null)
   const [editVariantValues, setEditVariantValues]     = useState({})
+  const [uploadingVariantImg, setUploadingVariantImg] = useState(false)
 
   const mountedRef = useRef(true)
   const PER_PAGE = 10
@@ -221,7 +224,8 @@ export default function Products() {
   async function openVariants(product) {
     setVariantProductId(product.id)
     setVariantProductName(product.name)
-    setVariantForm({ color: '', size: '', stock: 0, price: '' })
+    setVariantCategoryName(product.category_name || '')
+    setVariantForm(EMPTY_VARIANT)
     setEditingVariantId(null)
     await refreshVariants(product.id)
     setVariantModal(true)
@@ -233,33 +237,44 @@ export default function Products() {
   }
 
   async function addVariant() {
-    if (!variantForm.color && !variantForm.size) return
+    if (!variantForm.color && !variantForm.size && Object.keys(variantForm.attributes || {}).length === 0 && !variantForm.variant_name) return
     setSavingVariant(true)
+    // Auto-generate variant_name if not provided
+    const autoName = variantForm.variant_name || [variantForm.color, variantForm.size, ...Object.values(variantForm.attributes || {})].filter(Boolean).join(' / ')
     const res = await api.post(`/api/products/${variantProductId}/variants`, {
-      color: variantForm.color || null,
-      size:  variantForm.size  || null,
-      stock: parseInt(variantForm.stock) || 0,
-      price: variantForm.price ? parseFloat(variantForm.price) : null,
+      variant_name: autoName || null,
+      color:        variantForm.color      || null,
+      size:         variantForm.size       || null,
+      stock:        parseInt(variantForm.stock) || 0,
+      price:        variantForm.price      ? parseFloat(variantForm.price)      : null,
+      sale_price:   variantForm.sale_price ? parseFloat(variantForm.sale_price) : null,
+      sku:          variantForm.sku        || null,
+      status:       variantForm.status     || 'active',
+      images:       variantForm.images     || [],
+      attributes:   variantForm.attributes || {},
     })
     if (res.error) {
       alert('Failed to add variant: ' + (res.error?.message || res.error))
       setSavingVariant(false)
       return
     }
-    setVariantForm({ color: '', size: '', stock: 0, price: '' })
+    setVariantForm(EMPTY_VARIANT)
     await refreshVariants()
     setSavingVariant(false)
   }
 
-  // Quick-add a full size preset (all sizes at once with 0 stock)
+  // Quick-add a full size preset (all sizes at once with 0 stock, selected color)
   async function addSizePreset(sizes) {
     setSavingVariant(true)
+    const color = variantForm.color || null
     for (const sz of sizes) {
-      // Skip if already exists
-      const exists = variants.some(v => v.size === sz && !v.color)
+      const exists = variants.some(v => v.size === sz && (color ? v.color === color : !v.color))
       if (!exists) {
+        const autoName = [color, sz].filter(Boolean).join(' / ')
         await api.post(`/api/products/${variantProductId}/variants`, {
-          size: sz, stock: 0, color: null, price: null,
+          size: sz, color, stock: 0, price: null,
+          variant_name: autoName || null,
+          status: 'active', images: [], attributes: {},
         })
       }
     }
@@ -267,19 +282,76 @@ export default function Products() {
     setSavingVariant(false)
   }
 
+  async function duplicateVariant(v) {
+    setSavingVariant(true)
+    const res = await api.post(`/api/products/${variantProductId}/variants`, {
+      variant_name: v.variant_name ? v.variant_name + ' (copy)' : null,
+      color:      v.color, size: v.size,
+      stock:      v.stock, price: v.price,
+      sale_price: v.sale_price, sku: v.sku ? v.sku + '-copy' : null,
+      status:     v.status || 'active',
+      images:     Array.isArray(v.images) ? v.images : [],
+      attributes: v.attributes || {},
+    })
+    if (res.error) { alert('Duplicate failed: ' + (res.error?.message || res.error)) }
+    else await refreshVariants()
+    setSavingVariant(false)
+  }
+
+  async function uploadVariantImage(file) {
+    setUploadingVariantImg(true)
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.upload('/api/upload', form)
+    if (res.error) { alert('Upload failed: ' + res.error?.message); setUploadingVariantImg(false); return }
+    const url = res.data?.url
+    if (url) setVariantForm(prev => ({ ...prev, images: [...(prev.images || []), url] }))
+    setUploadingVariantImg(false)
+  }
+
   function startEditVariant(v) {
     setEditingVariantId(v.id)
-    setEditVariantValues({ stock: v.stock, price: v.price || '' })
+    setEditVariantValues({
+      variant_name: v.variant_name || '',
+      color:      v.color      || '',
+      size:       v.size       || '',
+      stock:      v.stock      ?? 0,
+      price:      v.price      || '',
+      sale_price: v.sale_price || '',
+      sku:        v.sku        || '',
+      status:     v.status     || 'active',
+      images:     Array.isArray(v.images) ? v.images : [],
+      attributes: v.attributes || {},
+    })
   }
 
   async function saveEditVariant(variantId) {
+    const autoName = editVariantValues.variant_name ||
+      [editVariantValues.color, editVariantValues.size, ...Object.values(editVariantValues.attributes || {})].filter(Boolean).join(' / ')
     const res = await api.put(`/api/products/${variantProductId}/variants/${variantId}`, {
-      stock: parseInt(editVariantValues.stock) || 0,
-      price: editVariantValues.price ? parseFloat(editVariantValues.price) : null,
+      variant_name: autoName || null,
+      color:      editVariantValues.color      || null,
+      size:       editVariantValues.size       || null,
+      stock:      parseInt(editVariantValues.stock) || 0,
+      price:      editVariantValues.price      ? parseFloat(editVariantValues.price)      : null,
+      sale_price: editVariantValues.sale_price ? parseFloat(editVariantValues.sale_price) : null,
+      sku:        editVariantValues.sku        || null,
+      status:     editVariantValues.status     || 'active',
+      images:     editVariantValues.images     || [],
+      attributes: editVariantValues.attributes || {},
     })
     if (res.error) { alert('Failed to update variant: ' + (res.error?.message || res.error)); return }
     setEditingVariantId(null)
     await refreshVariants()
+  }
+
+  async function uploadEditVariantImage(file) {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.upload('/api/upload', form)
+    if (res.error) { alert('Upload failed: ' + res.error?.message); return }
+    const url = res.data?.url
+    if (url) setEditVariantValues(prev => ({ ...prev, images: [...(prev.images || []), url] }))
   }
 
   async function deleteVariant(variantId) {
@@ -632,154 +704,356 @@ export default function Products() {
       </Modal>
 
       {/* ── Variants Modal ──────────────────────────────────────── */}
-      <Modal open={variantModal} onClose={() => { setVariantModal(false); load() }}
-        title={`Variants — ${variantProductName}`} width="max-w-2xl">
+      {variantModal && (() => {
+        const catKey   = slugToAttrKey(variantCategoryName) || ''
+        const isFashion   = ['fashion','footwear'].includes(catKey)
+        const isFootwear  = catKey === 'footwear'
+        const isPerfume   = catKey === 'perfumes'
+        const isBeauty    = catKey === 'beauty'
+        const isElectronics = ['electronics','mobiles-accessories'].includes(catKey)
+        const isWatch     = catKey === 'watches'
 
-        {/* Preset quick-add buttons */}
-        <div className="mb-4">
-          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wide mb-2">Quick-add preset sizes</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(SIZE_PRESETS).map(([label, sizes]) => (
-              <button key={label}
-                disabled={savingVariant}
-                onClick={() => addSizePreset(sizes)}
-                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-violet-100 text-slate-600 hover:text-violet-700 text-xs font-semibold transition-colors disabled:opacity-50 capitalize">
-                {label} ({sizes.join(', ')})
-              </button>
-            ))}
-          </div>
-        </div>
+        // Category-specific size options
+        const sizeOptions = isFootwear
+          ? ['UK 4','UK 5','UK 6','UK 7','UK 8','UK 9','UK 10','UK 11','UK 12']
+          : isFashion
+            ? ['XS','S','M','L','XL','XXL','3XL','4XL']
+            : isPerfume || isBeauty
+              ? ['15ml','20ml','30ml','50ml','75ml','100ml','150ml','200ml']
+              : []
 
-        {/* Variants table */}
-        {variants.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-6 border border-dashed border-slate-200 rounded-xl mb-4">
-            No variants yet. Use quick-add above or add manually below.
-          </p>
-        ) : (
-          <div className="border border-slate-100 rounded-xl overflow-hidden mb-4">
-            <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-100">
-              <p className="text-xs font-semibold text-slate-600">{variants.length} variants · {totalVariantStock} total units</p>
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  {['Color', 'Size', 'Stock', 'Price Override', ''].map(h => (
-                    <th key={h} className="text-left py-2 px-3 text-[10px] font-bold text-slate-400 uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {variants.map(v => (
-                  <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50/60 group">
-                    <td className="py-2 px-3">
-                      <div className="flex items-center gap-2">
-                        {v.color && (
-                          <div className="w-4 h-4 rounded-full border border-slate-200 flex-shrink-0"
-                            style={{ backgroundColor: v.color.toLowerCase() }} />
-                        )}
-                        <span>{v.color || <span className="text-slate-300">—</span>}</span>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-semibold ${
-                        v.size ? 'bg-slate-100 text-slate-700' : 'text-slate-300'
-                      }`}>{v.size || '—'}</span>
-                    </td>
-                    <td className="py-2 px-3 w-24">
-                      {editingVariantId === v.id ? (
-                        <input type="number" min={0} value={editVariantValues.stock}
-                          onChange={e => setEditVariantValues(p => ({ ...p, stock: e.target.value }))}
-                          className="w-16 px-2 py-1 border border-violet-300 rounded text-xs focus:outline-none focus:border-violet-500"
-                          autoFocus />
-                      ) : (
-                        <span className={`font-semibold ${
-                          parseInt(v.stock) === 0 ? 'text-red-500' :
-                          parseInt(v.stock) <= 5  ? 'text-amber-500' : 'text-slate-700'
-                        }`}>{v.stock}</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 w-28">
-                      {editingVariantId === v.id ? (
-                        <input type="number" min={0} placeholder="Base price"
-                          value={editVariantValues.price}
-                          onChange={e => setEditVariantValues(p => ({ ...p, price: e.target.value }))}
-                          className="w-20 px-2 py-1 border border-violet-300 rounded text-xs focus:outline-none focus:border-violet-500" />
-                      ) : (
-                        <span className={v.price ? 'text-teal-600 font-semibold' : 'text-slate-300'}>
-                          {v.price ? `₹${parseFloat(v.price).toLocaleString('en-IN')}` : '—'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex items-center gap-1">
-                        {editingVariantId === v.id ? (
-                          <>
-                            <button onClick={() => saveEditVariant(v.id)}
-                              className="px-2 py-1 rounded bg-teal-600 text-white text-[10px] font-bold hover:bg-teal-700">Save</button>
-                            <button onClick={() => setEditingVariantId(null)}
-                              className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10px] hover:bg-slate-200">×</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => startEditVariant(v)}
-                              className="p-1 rounded hover:bg-slate-100 text-slate-300 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Edit2 size={11} />
-                            </button>
-                            <button onClick={() => deleteVariant(v.id)}
-                              className="p-1 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors">
-                              <X size={12} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+        // Category-specific extra attribute options
+        const extraAttrs = isElectronics || isWatch
+          ? CATEGORY_ATTRIBUTES[catKey] || {}
+          : {}
+
+        // Color presets by category
+        const colorPresets = isWatch
+          ? ['Black','White','Gold','Silver','Rose Gold','Blue','Brown','Green']
+          : ['Black','White','Red','Blue','Green','Pink','Yellow','Grey','Brown','Beige','Maroon','Purple','Navy','Orange','Teal']
+
+        const fldCls = "w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-violet-400"
+        const lblCls = "text-[10px] font-semibold text-slate-500 mb-1 block"
+
+        function VariantImageSection({ imgs, onAdd, onRemove }) {
+          return (
+            <div>
+              <label className={lblCls}>Images</label>
+              <div className="flex flex-wrap gap-1.5">
+                {(imgs || []).map((url, i) => (
+                  <div key={url + i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200 group">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => onRemove(i)}
+                      className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center">
+                      <X size={12} className="text-white" />
+                    </button>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                <label className="w-12 h-12 rounded-lg border border-dashed border-slate-300 hover:border-violet-400 flex items-center justify-center cursor-pointer bg-slate-50 hover:bg-violet-50 transition-colors">
+                  <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && onAdd(e.target.files[0])} />
+                  {uploadingVariantImg ? <Loader size={14} className="animate-spin text-slate-400" /> : <Plus size={14} className="text-slate-400" />}
+                </label>
+              </div>
+            </div>
+          )
+        }
 
-        {/* Add single variant form */}
-        <div className="border border-dashed border-slate-200 rounded-xl p-4">
-          <p className="text-xs font-bold text-slate-600 mb-3">Add Single Variant</p>
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Size</label>
-              <input value={variantForm.size} placeholder="e.g. M, L, 8"
-                onChange={e => setVariantForm({ ...variantForm, size: e.target.value })}
-                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-violet-400" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Color (optional)</label>
-              <input value={variantForm.color} placeholder="e.g. Black"
-                onChange={e => setVariantForm({ ...variantForm, color: e.target.value })}
-                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-violet-400" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Stock</label>
-              <input type="number" min={0} value={variantForm.stock}
-                onChange={e => setVariantForm({ ...variantForm, stock: e.target.value })}
-                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-violet-400" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Price Override (₹)</label>
-              <input type="number" min={0} value={variantForm.price} placeholder="Same as base"
-                onChange={e => setVariantForm({ ...variantForm, price: e.target.value })}
-                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-violet-400" />
-            </div>
-          </div>
-          <button onClick={addVariant} disabled={savingVariant || (!variantForm.color && !variantForm.size)}
-            className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors">
-            <Plus size={13} />
-            {savingVariant ? 'Adding...' : 'Add Variant'}
-          </button>
-        </div>
+        return (
+          <Modal open={variantModal} onClose={() => { setVariantModal(false); load() }}
+            title={`Variants — ${variantProductName}`} width="max-w-3xl">
 
-        <div className="flex justify-end mt-4 pt-4 border-t border-slate-200">
-          <Button variant="secondary" onClick={() => setVariantModal(false)}>Done</Button>
-        </div>
-      </Modal>
+            {/* ── Quick-add size preset strip ── */}
+            {sizeOptions.length > 0 && (
+              <div className="mb-4 p-3 bg-violet-50 rounded-xl border border-violet-100">
+                <p className="text-[10px] font-bold text-violet-500 uppercase tracking-wide mb-2">
+                  Quick-add {isFootwear ? 'UK' : ''} sizes {variantForm.color ? `(color: ${variantForm.color})` : ''}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sizeOptions.map(sz => {
+                    const exists = variants.some(v => v.size === sz && (!variantForm.color || v.color === variantForm.color))
+                    return (
+                      <button key={sz} disabled={savingVariant || exists}
+                        onClick={() => addSizePreset([sz])}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                          exists ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                 : 'bg-white border border-violet-200 text-violet-700 hover:bg-violet-100'
+                        }`}>
+                        {sz}{exists ? ' ✓' : ''}
+                      </button>
+                    )
+                  })}
+                  {sizeOptions.length > 0 && (
+                    <button disabled={savingVariant}
+                      onClick={() => addSizePreset(sizeOptions.filter(sz => !variants.some(v => v.size === sz && (!variantForm.color || v.color === variantForm.color))))}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                      + Add All
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Existing variants table ── */}
+            {variants.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-5 border border-dashed border-slate-200 rounded-xl mb-4">
+                No variants yet — add one below.
+              </p>
+            ) : (
+              <div className="border border-slate-100 rounded-xl overflow-hidden mb-4">
+                <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                  <p className="text-xs font-semibold text-slate-600">{variants.length} variants · {totalVariantStock} total units</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/50">
+                        {['Variant', 'Color', 'Size', 'Stock', 'Price', 'Sale Price', 'SKU', 'Images', 'Status', ''].map(h => (
+                          <th key={h} className="text-left py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variants.map(v => {
+                        const isEditing = editingVariantId === v.id
+                        const varImgs = Array.isArray(v.images) ? v.images : []
+                        return (
+                          <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50/60 group align-top">
+                            {isEditing ? (
+                              <>
+                                <td className="py-2 px-2 min-w-[120px]">
+                                  <input value={editVariantValues.variant_name || ''}
+                                    onChange={e => setEditVariantValues(p => ({ ...p, variant_name: e.target.value }))}
+                                    placeholder="Auto-generated" className={fldCls} />
+                                </td>
+                                <td className="py-2 px-2 min-w-[120px]">
+                                  <select value={editVariantValues.color || ''}
+                                    onChange={e => setEditVariantValues(p => ({ ...p, color: e.target.value }))}
+                                    className={fldCls}>
+                                    <option value="">None</option>
+                                    {colorPresets.map(c => <option key={c} value={c}>{c}</option>)}
+                                    <option value="__custom__">Custom…</option>
+                                  </select>
+                                  {editVariantValues.color === '__custom__' && (
+                                    <input className={fldCls + ' mt-1'} placeholder="Enter color"
+                                      onChange={e => setEditVariantValues(p => ({ ...p, color: e.target.value }))} />
+                                  )}
+                                </td>
+                                <td className="py-2 px-2 min-w-[100px]">
+                                  {sizeOptions.length > 0 ? (
+                                    <select value={editVariantValues.size || ''} onChange={e => setEditVariantValues(p => ({ ...p, size: e.target.value }))} className={fldCls}>
+                                      <option value="">None</option>
+                                      {sizeOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                  ) : (
+                                    <input value={editVariantValues.size || ''} onChange={e => setEditVariantValues(p => ({ ...p, size: e.target.value }))} placeholder="e.g. M" className={fldCls} />
+                                  )}
+                                </td>
+                                <td className="py-2 px-2 w-20">
+                                  <input type="number" min={0} value={editVariantValues.stock}
+                                    onChange={e => setEditVariantValues(p => ({ ...p, stock: e.target.value }))}
+                                    className={fldCls} autoFocus />
+                                </td>
+                                <td className="py-2 px-2 w-24">
+                                  <input type="number" min={0} value={editVariantValues.price || ''} placeholder="Base"
+                                    onChange={e => setEditVariantValues(p => ({ ...p, price: e.target.value }))} className={fldCls} />
+                                </td>
+                                <td className="py-2 px-2 w-24">
+                                  <input type="number" min={0} value={editVariantValues.sale_price || ''} placeholder="—"
+                                    onChange={e => setEditVariantValues(p => ({ ...p, sale_price: e.target.value }))} className={fldCls} />
+                                </td>
+                                <td className="py-2 px-2 w-24">
+                                  <input value={editVariantValues.sku || ''} placeholder="SKU"
+                                    onChange={e => setEditVariantValues(p => ({ ...p, sku: e.target.value }))} className={fldCls} />
+                                </td>
+                                <td className="py-2 px-2">
+                                  <VariantImageSection
+                                    imgs={editVariantValues.images || []}
+                                    onAdd={uploadEditVariantImage}
+                                    onRemove={i => setEditVariantValues(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
+                                  />
+                                </td>
+                                <td className="py-2 px-2">
+                                  <select value={editVariantValues.status || 'active'} onChange={e => setEditVariantValues(p => ({ ...p, status: e.target.value }))} className={fldCls}>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                  </select>
+                                </td>
+                                <td className="py-2 px-2">
+                                  <div className="flex gap-1">
+                                    <button onClick={() => saveEditVariant(v.id)}
+                                      className="px-2 py-1 rounded bg-teal-600 text-white text-[10px] font-bold hover:bg-teal-700">Save</button>
+                                    <button onClick={() => setEditingVariantId(null)}
+                                      className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10px] hover:bg-slate-200">×</button>
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-2 px-2.5">
+                                  <span className="font-semibold text-slate-700">{v.variant_name || '—'}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <div className="flex items-center gap-1.5">
+                                    {v.color && <div className="w-3.5 h-3.5 rounded-full border border-slate-200 flex-shrink-0" style={{ backgroundColor: v.color.toLowerCase() }} />}
+                                    <span className="text-slate-700">{v.color || <span className="text-slate-300">—</span>}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.size ? 'bg-slate-100 text-slate-700' : 'text-slate-300'}`}>{v.size || '—'}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <span className={`font-semibold ${parseInt(v.stock) === 0 ? 'text-red-500' : parseInt(v.stock) <= 5 ? 'text-amber-500' : 'text-slate-700'}`}>{v.stock}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <span className={v.price ? 'text-teal-600 font-semibold' : 'text-slate-300'}>{v.price ? `₹${parseFloat(v.price).toLocaleString('en-IN')}` : '—'}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <span className={v.sale_price ? 'text-rose-600 font-semibold' : 'text-slate-300'}>{v.sale_price ? `₹${parseFloat(v.sale_price).toLocaleString('en-IN')}` : '—'}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <span className="text-slate-500 font-mono text-[10px]">{v.sku || '—'}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <div className="flex gap-1">
+                                    {varImgs.slice(0, 3).map((url, i) => (
+                                      <img key={i} src={url} alt="" className="w-7 h-7 rounded object-cover border border-slate-200" />
+                                    ))}
+                                    {varImgs.length > 3 && <span className="text-slate-400 text-[10px] self-center">+{varImgs.length - 3}</span>}
+                                    {varImgs.length === 0 && <span className="text-slate-300">—</span>}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${v.status === 'inactive' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                                    {v.status || 'active'}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => startEditVariant(v)} title="Edit"
+                                      className="p-1 rounded hover:bg-violet-50 text-slate-400 hover:text-violet-600"><Edit2 size={11} /></button>
+                                    <button onClick={() => duplicateVariant(v)} title="Duplicate"
+                                      className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600"><Copy size={11} /></button>
+                                    <button onClick={() => deleteVariant(v.id)} title="Delete"
+                                      className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-500"><Trash2 size={11} /></button>
+                                  </div>
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ── Add variant form ── */}
+            <div className="border border-dashed border-violet-200 rounded-xl p-4 bg-violet-50/30">
+              <p className="text-xs font-bold text-violet-700 mb-3">Add Variant</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="col-span-2 sm:col-span-3">
+                  <label className={lblCls}>Variant Name <span className="font-normal text-slate-400">(auto-generated if empty)</span></label>
+                  <input value={variantForm.variant_name} placeholder="e.g. Black XL"
+                    onChange={e => setVariantForm(p => ({ ...p, variant_name: e.target.value }))} className={fldCls} />
+                </div>
+
+                <div>
+                  <label className={lblCls}>Color</label>
+                  <select value={variantForm.color}
+                    onChange={e => setVariantForm(p => ({ ...p, color: e.target.value === '__custom__' ? '' : e.target.value }))}
+                    className={fldCls}>
+                    <option value="">None</option>
+                    {colorPresets.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="__custom__">Custom…</option>
+                  </select>
+                  {variantForm.color === '__custom__' || (!colorPresets.includes(variantForm.color) && variantForm.color) ? (
+                    <input className={fldCls + ' mt-1'} value={variantForm.color === '__custom__' ? '' : variantForm.color}
+                      placeholder="Enter color name" onChange={e => setVariantForm(p => ({ ...p, color: e.target.value }))} />
+                  ) : null}
+                </div>
+
+                <div>
+                  <label className={lblCls}>Size</label>
+                  {sizeOptions.length > 0 ? (
+                    <select value={variantForm.size} onChange={e => setVariantForm(p => ({ ...p, size: e.target.value }))} className={fldCls}>
+                      <option value="">None</option>
+                      {sizeOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  ) : (
+                    <input value={variantForm.size} placeholder="e.g. 500ml, Large"
+                      onChange={e => setVariantForm(p => ({ ...p, size: e.target.value }))} className={fldCls} />
+                  )}
+                </div>
+
+                {/* Extra attributes for electronics / watches */}
+                {Object.entries(extraAttrs).slice(0, 4).map(([attr, opts]) => (
+                  <div key={attr}>
+                    <label className={lblCls}>{attr}</label>
+                    <select value={variantForm.attributes?.[attr] || ''}
+                      onChange={e => setVariantForm(p => ({ ...p, attributes: { ...(p.attributes || {}), [attr]: e.target.value } }))}
+                      className={fldCls}>
+                      <option value="">Select</option>
+                      {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                ))}
+
+                <div>
+                  <label className={lblCls}>Stock *</label>
+                  <input type="number" min={0} value={variantForm.stock}
+                    onChange={e => setVariantForm(p => ({ ...p, stock: e.target.value }))} className={fldCls} />
+                </div>
+
+                <div>
+                  <label className={lblCls}>Price (₹) <span className="font-normal text-slate-400">override</span></label>
+                  <input type="number" min={0} value={variantForm.price} placeholder="Same as base"
+                    onChange={e => setVariantForm(p => ({ ...p, price: e.target.value }))} className={fldCls} />
+                </div>
+
+                <div>
+                  <label className={lblCls}>Sale Price (₹)</label>
+                  <input type="number" min={0} value={variantForm.sale_price} placeholder="—"
+                    onChange={e => setVariantForm(p => ({ ...p, sale_price: e.target.value }))} className={fldCls} />
+                </div>
+
+                <div>
+                  <label className={lblCls}>SKU</label>
+                  <input value={variantForm.sku} placeholder="e.g. BLK-XL-001"
+                    onChange={e => setVariantForm(p => ({ ...p, sku: e.target.value }))} className={fldCls} />
+                </div>
+
+                <div>
+                  <label className={lblCls}>Status</label>
+                  <select value={variantForm.status} onChange={e => setVariantForm(p => ({ ...p, status: e.target.value }))} className={fldCls}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <div className="col-span-2 sm:col-span-3">
+                  <VariantImageSection
+                    imgs={variantForm.images}
+                    onAdd={uploadVariantImage}
+                    onRemove={i => setVariantForm(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
+                  />
+                </div>
+              </div>
+
+              <button onClick={addVariant}
+                disabled={savingVariant || (!variantForm.color && !variantForm.size && !variantForm.variant_name && Object.keys(variantForm.attributes || {}).filter(k => variantForm.attributes[k]).length === 0)}
+                className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors">
+                <Plus size={13} />
+                {savingVariant ? 'Saving…' : 'Add Variant'}
+              </button>
+            </div>
+
+            <div className="flex justify-end mt-4 pt-4 border-t border-slate-200">
+              <Button variant="secondary" onClick={() => { setVariantModal(false); load() }}>Done</Button>
+            </div>
+          </Modal>
+        )
+      })()}
     </Layout>
   )
 }
