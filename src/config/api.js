@@ -1,37 +1,54 @@
-// Central API client for admin portal (Supabase has been fully removed)
-
-// SEC-11: Tokens stored in sessionStorage (cleared when browser tab closes).
-// TODO: Migrate to httpOnly cookies for full XSS protection — requires backend
-// Set-Cookie support and CORS credentials configuration.
+// Central API client for admin portal
+//
+// Security model:
+//   • Access token  — short-lived (15 min), stored in sessionStorage.
+//                     Low XSS risk: expires before attacker can do damage.
+//   • Refresh token — long-lived (30 days), stored in httpOnly cookie set
+//                     by the backend. JS cannot read it — immune to XSS.
+//   • CSRF          — all mutating requests include X-Requested-With header.
+//                     Combined with SameSite=Strict cookie this blocks CSRF.
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
+const REQUEST_TIMEOUT_MS = 20000
 
 function getToken() {
   return sessionStorage.getItem('admin_access_token')
 }
 
-function saveTokens(access, refresh) {
+function saveTokens(access) {
+  // Refresh token is now an httpOnly cookie set by the server — never stored here.
   sessionStorage.setItem('admin_access_token', access)
-  if (refresh) sessionStorage.setItem('admin_refresh_token', refresh)
 }
 
 function clearTokens() {
   sessionStorage.removeItem('admin_access_token')
-  sessionStorage.removeItem('admin_refresh_token')
+  // The httpOnly refresh cookie is cleared server-side on logout.
 }
 
 async function refreshAccessToken() {
-  const refresh = sessionStorage.getItem('admin_refresh_token')
-  if (!refresh) return null
-  const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refresh }),
-  })
-  if (!res.ok) { clearTokens(); return null }
-  const data = await res.json()
-  sessionStorage.setItem('admin_access_token', data.access_token)
-  return data.access_token
+  // Cookie is sent automatically by the browser (credentials: 'include').
+  // No need to read refresh_token from JS — it lives in an httpOnly cookie.
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+      method:      'POST',
+      credentials: 'include',       // sends httpOnly cookie automatically
+      headers: {
+        'Content-Type':    'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer))
+    if (!res.ok) { clearTokens(); return null }
+    const data = await res.json()
+    sessionStorage.setItem('admin_access_token', data.access_token)
+    return data.access_token
+  } catch {
+    clearTokens()
+    return null
+  }
 }
 
 const REQUEST_TIMEOUT_MS = 20000
@@ -39,7 +56,11 @@ const REQUEST_TIMEOUT_MS = 20000
 async function request(method, path, body, isFormData = false) {
   let token = getToken()
   const makeRequest = async (t) => {
-    const headers = {}
+    const headers = {
+      // CSRF guard: backend rejects mutating requests without this header.
+      // Browsers never auto-set it cross-origin, so it blocks CSRF attacks.
+      'X-Requested-With': 'XMLHttpRequest',
+    }
     if (t) headers['Authorization'] = `Bearer ${t}`
     if (!isFormData) headers['Content-Type'] = 'application/json'
     const controller = new AbortController()
@@ -48,6 +69,7 @@ async function request(method, path, body, isFormData = false) {
       return await fetch(`${BASE_URL}${path}`, {
         method,
         headers,
+        credentials: 'include',   // sends httpOnly refresh cookie on every request
         signal: controller.signal,
         body: isFormData ? body : body ? JSON.stringify(body) : undefined,
       })
@@ -92,12 +114,12 @@ const api = {
   upload: (path, form)  => request('POST',   path, form, true),
 
   // Auth helpers
-  login:     (email, password) =>
+  login:  (email, password) =>
     request('POST', '/api/auth/admin/login', { email, password }),
-  logout:    () => {
-    const refresh = sessionStorage.getItem('admin_refresh_token')
+  logout: () => {
     clearTokens()
-    return request('POST', '/api/auth/logout', { refresh_token: refresh })
+    // Cookie is cleared server-side; no need to send refresh_token in body
+    return request('POST', '/api/auth/logout', {})
   },
   saveTokens,
   clearTokens,
