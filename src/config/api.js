@@ -1,13 +1,3 @@
-// Central API client for admin portal
-//
-// Security model:
-//   • Access token  — short-lived (15 min), stored in sessionStorage.
-//                     Low XSS risk: expires before attacker can do damage.
-//   • Refresh token — long-lived (30 days), stored in httpOnly cookie set
-//                     by the backend. JS cannot read it — immune to XSS.
-//   • CSRF          — all mutating requests include X-Requested-With header.
-//                     Combined with SameSite=Strict cookie this blocks CSRF.
-
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
 const REQUEST_TIMEOUT_MS = 20000
@@ -16,30 +6,31 @@ function getToken() {
   return sessionStorage.getItem('admin_access_token')
 }
 
-function saveTokens(access) {
-  // Refresh token is now an httpOnly cookie set by the server — never stored here.
+function getRefreshToken() {
+  return sessionStorage.getItem('admin_refresh_token')
+}
+
+function saveTokens(access, refresh) {
   sessionStorage.setItem('admin_access_token', access)
+  if (refresh) sessionStorage.setItem('admin_refresh_token', refresh)
 }
 
 function clearTokens() {
   sessionStorage.removeItem('admin_access_token')
-  // The httpOnly refresh cookie is cleared server-side on logout.
+  sessionStorage.removeItem('admin_refresh_token')
 }
 
 async function refreshAccessToken() {
-  // Cookie is sent automatically by the browser (credentials: 'include').
-  // No need to read refresh_token from JS — it lives in an httpOnly cookie.
+  const refresh_token = getRefreshToken()
+  if (!refresh_token) { clearTokens(); return null }
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
-      method:      'POST',
-      credentials: 'include',       // sends httpOnly cookie automatically
-      headers: {
-        'Content-Type':    'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      signal: controller.signal,
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body:    JSON.stringify({ refresh_token }),
+      signal:  controller.signal,
     }).finally(() => clearTimeout(timer))
     if (!res.ok) { clearTokens(); return null }
     const data = await res.json()
