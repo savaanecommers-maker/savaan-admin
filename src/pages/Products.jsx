@@ -114,6 +114,7 @@ export default function Products() {
   const [uploadingVariantImg, setUploadingVariantImg] = useState(false)
 
   const mountedRef = useRef(true)
+  const [loadError, setLoadError] = useState(null)
   const PER_PAGE = 10
 
   useEffect(() => {
@@ -124,11 +125,17 @@ export default function Products() {
 
   async function load() {
     setLoading(true)
+    setLoadError(null)
     const [pr, cr] = await Promise.all([
       api.get('/api/products/all'),
       api.get('/api/categories'),
     ])
     if (!mountedRef.current) return
+    if (pr.error) {
+      setLoadError(pr.error?.message || 'Failed to load products')
+      setLoading(false)
+      return
+    }
     setProducts(pr.data?.products ?? pr.data ?? [])
     setCategories(cr.data?._list ?? cr.data ?? [])
     setLoading(false)
@@ -486,6 +493,12 @@ export default function Products() {
 
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-sm">Loading products...</div>
+        ) : loadError ? (
+          <div className="py-16 text-center">
+            <p className="text-red-500 text-sm font-medium mb-2">Failed to load products</p>
+            <p className="text-slate-400 text-xs mb-4">{loadError}</p>
+            <button onClick={load} className="text-teal-600 text-sm underline">Retry</button>
+          </div>
         ) : (
           <>
             <Table columns={cols} data={paginated} />
@@ -763,25 +776,40 @@ export default function Products() {
         const fldCls = "w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-violet-400"
         const lblCls = "text-[10px] font-semibold text-slate-500 mb-1 block"
 
-        function VariantImageSection({ imgs, onAdd, onRemove }) {
+        function VariantImageSection({ imgs, onAdd, onRemove, color }) {
+          const hasColor = color && color !== '__custom__' && color.trim() !== ''
           return (
-            <div>
-              <label className={lblCls}>Images</label>
-              <div className="flex flex-wrap gap-1.5">
+            <div className={`rounded-xl p-3 border transition-colors ${hasColor ? 'border-violet-200 bg-violet-50/40' : 'border-slate-200 bg-slate-50/40'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Image size={13} className={hasColor ? 'text-violet-500' : 'text-slate-400'} />
+                <label className={`text-[10px] font-bold uppercase tracking-wide ${hasColor ? 'text-violet-600' : 'text-slate-500'}`}>
+                  {hasColor ? `Images for "${color}" colour` : 'Variant Images'}
+                  <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">(optional)</span>
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {(imgs || []).map((url, i) => (
-                  <div key={url + i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200 group">
+                  <div key={url + i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-200 group">
                     <img src={url} alt="" className="w-full h-full object-cover" />
                     <button onClick={() => onRemove(i)}
-                      className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center">
+                      className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center">
                       <X size={12} className="text-white" />
                     </button>
                   </div>
                 ))}
-                <label className="w-12 h-12 rounded-lg border border-dashed border-slate-300 hover:border-violet-400 flex items-center justify-center cursor-pointer bg-slate-50 hover:bg-violet-50 transition-colors">
-                  <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && onAdd(e.target.files[0])} />
-                  {uploadingVariantImg ? <Loader size={14} className="animate-spin text-slate-400" /> : <Plus size={14} className="text-slate-400" />}
+                <label className={`w-14 h-14 rounded-lg border border-dashed flex items-center justify-center cursor-pointer transition-colors ${hasColor ? 'border-violet-300 hover:border-violet-500 bg-white hover:bg-violet-50' : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50'}`}>
+                  <input type="file" accept="image/*" multiple className="hidden"
+                    onChange={e => { if (e.target.files) Array.from(e.target.files).forEach(f => onAdd(f)) }} />
+                  {uploadingVariantImg
+                    ? <Loader size={14} className="animate-spin text-slate-400" />
+                    : <Plus size={14} className={hasColor ? 'text-violet-400' : 'text-slate-400'} />}
                 </label>
               </div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                {hasColor
+                  ? `Add photos showing the ${color} colour. Storage/RAM variants sharing the same colour can reuse the main product images.`
+                  : 'Add images only if this variant looks visually different (e.g. different colour). Storage, RAM, and size variants can skip this.'}
+              </p>
             </div>
           )
         }
@@ -898,6 +926,7 @@ export default function Products() {
                                     imgs={editVariantValues.images || []}
                                     onAdd={uploadEditVariantImage}
                                     onRemove={i => setEditVariantValues(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
+                                    color={editVariantValues.color}
                                   />
                                 </td>
                                 <td className="py-2 px-2">
@@ -1064,6 +1093,7 @@ export default function Products() {
                     imgs={variantForm.images}
                     onAdd={uploadVariantImage}
                     onRemove={i => setVariantForm(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
+                    color={variantForm.color}
                   />
                 </div>
               </div>

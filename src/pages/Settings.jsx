@@ -2,11 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import Layout from '../components/layout/Layout'
 import { Button, Input, Card } from '../components/ui/index'
 import api from '../config/api'
-import { Save, Store, Globe, Lock, Palette, Truck, CheckCircle, Loader } from 'lucide-react'
+import { Save, Store, Globe, Lock, Palette, Truck, CheckCircle, Loader, CreditCard } from 'lucide-react'
 
 const TABS = [
   { key: 'general',  label: 'General',  icon: Store },
   { key: 'shipping', label: 'Shipping', icon: Truck },
+  { key: 'payments', label: 'Payments', icon: CreditCard },
   { key: 'theme',    label: 'Theme',    icon: Palette },
   { key: 'social',   label: 'Social',   icon: Globe },
   { key: 'security', label: 'Security', icon: Lock },
@@ -31,6 +32,10 @@ const DEFAULTS = {
   instagram_url:       '',
   twitter_url:         '',
   youtube_url:         '',
+  upi_vpa:             '',
+  merchant_name:       'Savaan',
+  cod_enabled:         'true',
+  cashfree_enabled:    'true',
 }
 
 export default function Settings() {
@@ -237,6 +242,105 @@ export default function Settings() {
               <p className="text-xs text-slate-400">These values are shown in the app to customers during checkout.</p>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* ── PAYMENTS ── */}
+      {active === 'payments' && (
+        <div className="space-y-6 max-w-2xl">
+
+          {/* Cashfree — gateway payments */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard size={16} className="text-teal-600" />
+              <h3 className="font-bold text-slate-800">Cashfree Payment Gateway</h3>
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">ACTIVE</span>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">Handles Cards, UPI, Net Banking and Wallets securely.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 mb-1 uppercase tracking-wide">Environment</p>
+                <p className="text-sm font-bold text-slate-800">Production</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 mb-1 uppercase tracking-wide">Status</p>
+                <p className="text-sm font-bold text-emerald-600">✓ Credentials set</p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Cashfree Enabled</p>
+                <p className="text-xs text-slate-400 mt-0.5">Cards · UPI · Net Banking · Wallets</p>
+              </div>
+              <button
+                onClick={() => set('cashfree_enabled', settings.cashfree_enabled === 'true' ? 'false' : 'true')}
+                className={`relative w-11 h-6 rounded-full transition-colors ${settings.cashfree_enabled === 'true' ? 'bg-teal-500' : 'bg-slate-300'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.cashfree_enabled === 'true' ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+          </Card>
+
+          {/* Manual UPI */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">📲</span>
+              <h3 className="font-bold text-slate-800">Manual UPI (QR Code)</h3>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">Customers scan your QR code and pay directly. You verify the UTR manually.</p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">
+                  Your UPI ID (VPA) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={settings.upi_vpa || ''}
+                  onChange={e => set('upi_vpa', e.target.value)}
+                  placeholder="e.g. savaan@okicici or 9876543210@upi"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Find this in GPay → Profile, PhonePe → Profile, or your bank's UPI section.
+                </p>
+              </div>
+              <Input
+                label="Merchant Name (shown in UPI apps)"
+                value={settings.merchant_name || ''}
+                onChange={e => set('merchant_name', e.target.value)}
+                placeholder="Savaan"
+              />
+              {!settings.upi_vpa && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                  ⚠️ No UPI ID set — customers will see an error when selecting Manual UPI payment.
+                </div>
+              )}
+              {settings.upi_vpa && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-700">
+                  ✓ UPI ID configured — customers can pay via QR code or UPI deep link.
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Cash on Delivery */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-base">💵</span>
+              <h3 className="font-bold text-slate-800">Cash on Delivery</h3>
+            </div>
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">COD Enabled</p>
+                <p className="text-xs text-slate-400 mt-0.5">Allow customers to pay cash on delivery</p>
+              </div>
+              <button
+                onClick={() => set('cod_enabled', settings.cod_enabled === 'true' ? 'false' : 'true')}
+                className={`relative w-11 h-6 rounded-full transition-colors ${settings.cod_enabled === 'true' ? 'bg-teal-500' : 'bg-slate-300'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.cod_enabled === 'true' ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+          </Card>
+
         </div>
       )}
 

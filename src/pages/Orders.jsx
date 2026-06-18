@@ -200,18 +200,38 @@ export default function Orders() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-xs text-slate-400">Order ID</p><p className="font-semibold text-teal-600">{o.order_number}</p></div>
                 <div><p className="text-xs text-slate-400">Date</p><p className="font-semibold">{formatDate(o.created_at)}</p></div>
-                <div><p className="text-xs text-slate-400">Payment Method</p><p className="font-semibold capitalize">{o.payment_method?.replace(/_/g,' ') || '—'}</p></div>
+                <div>
+                  <p className="text-xs text-slate-400">Payment Method</p>
+                  <p className="font-semibold capitalize">
+                    {o.payment_app
+                      ? `${o.payment_app.replace(/_/g,' ')} (UPI)`
+                      : o.payment_method?.replace(/_/g,' ') || '—'}
+                  </p>
+                </div>
                 <div><p className="text-xs text-slate-400">Total Amount</p><p className="font-bold text-teal-600">{formatPrice(o.total)}</p></div>
                 <div>
                   <p className="text-xs text-slate-400">Payment Status</p>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                    o.payment_status === 'success'  ? 'bg-emerald-100 text-emerald-700' :
-                    o.payment_status === 'failed'   ? 'bg-red-100 text-red-600' :
-                    o.payment_status === 'refunded' ? 'bg-violet-100 text-violet-700' :
+                    o.payment_status === 'paid'      ? 'bg-emerald-100 text-emerald-700' :
+                    o.payment_status === 'success'   ? 'bg-emerald-100 text-emerald-700' :
+                    o.payment_status === 'failed'    ? 'bg-red-100 text-red-600' :
+                    o.payment_status === 'refunded'  ? 'bg-violet-100 text-violet-700' :
                     'bg-amber-100 text-amber-700'
                   }`}>{o.payment_status || 'pending'}</span>
                 </div>
                 <div><p className="text-xs text-slate-400">Customer</p><p className="font-semibold text-xs">{o.full_name || '—'}<br/><span className="text-slate-400 font-normal">{o.email}</span></p></div>
+                {o.cf_payment_id && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-slate-400">Transaction ID</p>
+                    <p className="font-mono text-xs text-slate-600 break-all">{o.cf_payment_id}</p>
+                  </div>
+                )}
+                {o.cf_order_id && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-slate-400">Cashfree Order ID</p>
+                    <p className="font-mono text-xs text-slate-600 break-all">{o.cf_order_id}</p>
+                  </div>
+                )}
               </div>
 
               {/* Items */}
