@@ -32,13 +32,16 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function refreshSession() {
+    // Same fix as api.js: admin sessions never get a refresh_token in
+    // sessionStorage (it's httpOnly-cookie-only by design), so don't
+    // require it here — credentials: 'include' sends the cookie instead.
     const refresh_token = sessionStorage.getItem('admin_refresh_token')
-    if (!refresh_token) { api.clearTokens(); return }
     try {
       const res = await fetch(`${api.BASE_URL}/api/auth/refresh`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body:    JSON.stringify({ refresh_token }),
+        method:      'POST',
+        headers:     { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body:        JSON.stringify(refresh_token ? { refresh_token } : {}),
+        credentials: 'include',
       })
       if (res.ok) {
         const data = await res.json()

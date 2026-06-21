@@ -21,16 +21,21 @@ function clearTokens() {
 }
 
 async function refreshAccessToken() {
+  // Admin login never returns a refresh_token in the JSON body — the backend
+  // deliberately only sets it as an httpOnly cookie (XSS protection), so
+  // sessionStorage's copy is always empty for admin sessions. Don't bail out
+  // just because it's missing; the cookie alone (sent via credentials:
+  // 'include') is enough for the backend to authenticate the refresh.
   const refresh_token = getRefreshToken()
-  if (!refresh_token) { clearTokens(); return null }
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      body:    JSON.stringify({ refresh_token }),
-      signal:  controller.signal,
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body:        JSON.stringify(refresh_token ? { refresh_token } : {}),
+      credentials: 'include',
+      signal:      controller.signal,
     }).finally(() => clearTimeout(timer))
     if (!res.ok) { clearTokens(); return null }
     const data = await res.json()
