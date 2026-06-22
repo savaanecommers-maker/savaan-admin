@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Package, Grid3X3, ShoppingBag, Users,
   Archive, Zap, Tag, Image, Star, CreditCard, Truck,
   Bell, BarChart2, UserCog, Settings, LogOut, ChevronDown, RotateCcw, LayoutGrid, Gem,
-  BookOpen
+  BookOpen, UserMinus
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -37,6 +37,7 @@ const NAV = [
   { label: 'Reports',       icon: BarChart2,       path: '/reports' },
   { label: 'Users',         icon: UserCog,         path: '/users' },
   { label: 'Content',       icon: BookOpen,        path: '/content' },
+  { label: 'Acc. Deletions', icon: UserMinus,     path: '/account-deletions' },
   { label: 'Settings',      icon: Settings,        path: '/settings' },
 ]
 

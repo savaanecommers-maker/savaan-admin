@@ -32,7 +32,7 @@ const CATEGORY_ATTRIBUTES = {
   'jewelry-accessories':{ Gender: ['Men','Women','Unisex'], 'Metal Type': ['Gold','Silver','Rose Gold','Platinum','Brass'], Stone: ['Diamond','Ruby','Emerald','Sapphire','Pearl','None'] },
   'bags-luggage':       { Gender: ['Men','Women','Unisex'], Type: ['Backpack','Handbag','Tote','Clutch','Wallet','Luggage'], Material: ['Leather','Canvas','Nylon','Polyester'] },
   'health-wellness':    { Form: ['Tablet','Capsule','Liquid','Powder','Cream'], Benefits: ['Immunity','Energy','Sleep','Weight','Skin','Hair'] },
-  'mobiles-accessories':{ OS: ['Android','iOS','Other'], Features: ['5G','Wireless Charging','Fast Charging','Foldable'] },
+  'mobiles-accessories':{ Storage: ['32GB','64GB','128GB','256GB','512GB','1TB'], RAM: ['3GB','4GB','6GB','8GB','12GB','16GB'], OS: ['Android','iOS','Other'] },
   'seasonal-collections':{ Season: ['Summer','Winter','Monsoon','Festive'], Gender: ['Men','Women','Unisex','Kids'] },
 }
 
@@ -244,7 +244,11 @@ export default function Products() {
   }
 
   async function addVariant() {
-    if (!variantForm.color && !variantForm.size && Object.keys(variantForm.attributes || {}).length === 0 && !variantForm.variant_name) return
+    const hasAnyField = variantForm.color || variantForm.size || Object.keys(variantForm.attributes || {}).filter(k => variantForm.attributes[k]).length > 0 || variantForm.variant_name
+    if (!hasAnyField) {
+      alert('Please fill in at least one field: Color, Size, an attribute (Storage/RAM), or a Variant Name.')
+      return
+    }
     setSavingVariant(true)
     // Auto-generate variant_name if not provided
     const autoName = variantForm.variant_name || [variantForm.color, variantForm.size, ...Object.values(variantForm.attributes || {})].filter(Boolean).join(' / ')
@@ -863,7 +867,7 @@ export default function Products() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50/50">
-                        {['Variant', 'Color', 'Size', 'Stock', 'Price', 'Sale Price', 'SKU', 'Images', 'Status', ''].map(h => (
+                        {['Variant', 'Color', 'Size', 'Attributes', 'Stock', 'Price', 'Sale Price', 'SKU', 'Images', 'Status', ''].map(h => (
                           <th key={h} className="text-left py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -902,6 +906,18 @@ export default function Products() {
                                     </select>
                                   ) : (
                                     <input value={editVariantValues.size || ''} onChange={e => setEditVariantValues(p => ({ ...p, size: e.target.value }))} placeholder="e.g. M" className={fldCls} />
+                                  )}
+                                </td>
+                                <td className="py-2 px-2 min-w-[140px]">
+                                  {Object.entries(editVariantValues.attributes || {}).map(([k, val]) => (
+                                    <div key={k} className="flex items-center gap-1 mb-1">
+                                      <span className="text-[10px] text-slate-400 w-16 shrink-0">{k}</span>
+                                      <input value={val} onChange={e => setEditVariantValues(p => ({ ...p, attributes: { ...p.attributes, [k]: e.target.value } }))}
+                                        className={fldCls + ' flex-1'} />
+                                    </div>
+                                  ))}
+                                  {(!editVariantValues.attributes || Object.keys(editVariantValues.attributes).length === 0) && (
+                                    <span className="text-slate-300 text-[10px]">—</span>
                                   )}
                                 </td>
                                 <td className="py-2 px-2 w-20">
@@ -959,13 +975,31 @@ export default function Products() {
                                   <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.size ? 'bg-slate-100 text-slate-700' : 'text-slate-300'}`}>{v.size || '—'}</span>
                                 </td>
                                 <td className="py-2 px-2.5">
+                                  {v.attributes && Object.keys(v.attributes).length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {Object.entries(v.attributes).map(([k, val]) => (
+                                        <span key={k} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold whitespace-nowrap">
+                                          <span className="text-blue-400">{k}:</span> {val}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : <span className="text-slate-300">—</span>}
+                                </td>
+                                <td className="py-2 px-2.5">
                                   <span className={`font-semibold ${parseInt(v.stock) === 0 ? 'text-red-500' : parseInt(v.stock) <= 5 ? 'text-amber-500' : 'text-slate-700'}`}>{v.stock}</span>
                                 </td>
                                 <td className="py-2 px-2.5">
                                   <span className={v.price ? 'text-teal-600 font-semibold' : 'text-slate-300'}>{v.price ? `₹${parseFloat(v.price).toLocaleString('en-IN')}` : '—'}</span>
                                 </td>
                                 <td className="py-2 px-2.5">
-                                  <span className={v.sale_price ? 'text-rose-600 font-semibold' : 'text-slate-300'}>{v.sale_price ? `₹${parseFloat(v.sale_price).toLocaleString('en-IN')}` : '—'}</span>
+                                  {v.sale_price ? (
+                                    <div>
+                                      <span className="text-rose-600 font-semibold">{`₹${parseFloat(v.sale_price).toLocaleString('en-IN')}`}</span>
+                                      {v.price && <span className="ml-1 text-[10px] text-green-600 font-semibold">
+                                        ({Math.round((parseFloat(v.price) - parseFloat(v.sale_price)) / parseFloat(v.price) * 100)}% off)
+                                      </span>}
+                                    </div>
+                                  ) : <span className="text-slate-300">—</span>}
                                 </td>
                                 <td className="py-2 px-2.5">
                                   <span className="text-slate-500 font-mono text-[10px]">{v.sku || '—'}</span>

@@ -24,6 +24,7 @@ import Returns          from './pages/Returns'
 import HomepageSections  from './pages/HomepageSections'
 import LuxuryCollections    from './pages/LuxuryCollections'
 import ContentManagement    from './pages/ContentManagement'
+import AccountDeletionRequests from './pages/AccountDeletionRequests'
 
 function Guard({ children }) {
   const { isAuthenticated } = useAuth()
@@ -56,6 +57,7 @@ function AppRoutes() {
       <Route path="/homepage-sections"   element={<Guard><HomepageSections /></Guard>} />
       <Route path="/luxury-collections"  element={<Guard><LuxuryCollections /></Guard>} />
       <Route path="/content"  element={<Guard><ContentManagement /></Guard>} />
+      <Route path="/account-deletions" element={<Guard><AccountDeletionRequests /></Guard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

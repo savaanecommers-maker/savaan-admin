@@ -51,14 +51,15 @@ export default function Dashboard() {
       const start30 = new Date(now); start30.setDate(now.getDate() - 30)
       const start60 = new Date(now); start60.setDate(now.getDate() - 60)
 
+      const REVENUE_STATUSES = new Set(['confirmed', 'processing', 'packed', 'shipped', 'out_for_delivery', 'delivered'])
       const orders30 = allOrders.filter(o => new Date(o.created_at) >= start30)
       const orders60 = allOrders.filter(o => {
         const d = new Date(o.created_at)
         return d >= start60 && d < start30
       })
 
-      const totalSales = orders30.reduce((s, o) => s + (parseFloat(o.total) || 0), 0)
-      const prevSales  = orders60.reduce((s, o) => s + (parseFloat(o.total) || 0), 0)
+      const totalSales = orders30.filter(o => REVENUE_STATUSES.has(o.status)).reduce((s, o) => s + (parseFloat(o.total) || 0), 0)
+      const prevSales  = orders60.filter(o => REVENUE_STATUSES.has(o.status)).reduce((s, o) => s + (parseFloat(o.total) || 0), 0)
 
       setStats({
         sales:     totalSales,
@@ -86,7 +87,7 @@ export default function Dashboard() {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i)
         const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-        const dayOrders = allOrders.filter(o => new Date(o.created_at).toDateString() === d.toDateString())
+        const dayOrders = allOrders.filter(o => new Date(o.created_at).toDateString() === d.toDateString() && REVENUE_STATUSES.has(o.status))
         days.push({
           name: label,
           revenue: dayOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0),

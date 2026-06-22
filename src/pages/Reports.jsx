@@ -49,6 +49,8 @@ export default function Reports() {
     setLoading(false)
   }
 
+  const REVENUE_STATUSES = new Set(['confirmed', 'processing', 'packed', 'shipped', 'out_for_delivery', 'delivered'])
+
   function rangeOrders() {
     const days = range === 'week' ? 7 : range === 'month' ? 30 : 90
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days)
@@ -64,6 +66,8 @@ export default function Reports() {
 
   const filtered = rangeOrders()
   const prev     = prevRangeOrders()
+  const revenueOrders     = filtered.filter(o => REVENUE_STATUSES.has(o.status))
+  const prevRevenueOrders = prev.filter(o => REVENUE_STATUSES.has(o.status))
 
   function revenueByPeriod() {
     const days = range === 'week' ? 7 : range === 'month' ? 30 : 90
@@ -80,7 +84,7 @@ export default function Reports() {
       })
       result.push({
         name:    label,
-        revenue: bucket.reduce((s, o) => s + parseFloat(o.total || 0), 0),
+        revenue: bucket.filter(o => REVENUE_STATUSES.has(o.status)).reduce((s, o) => s + parseFloat(o.total || 0), 0),
         orders:  bucket.length,
       })
     }
@@ -112,10 +116,10 @@ export default function Reports() {
     return `${d > 0 ? '+' : ''}${d}%`
   }
 
-  const totalRevenue  = filtered.reduce((s, o) => s + parseFloat(o.total || 0), 0)
-  const prevRevenue   = prev.reduce((s, o) => s + parseFloat(o.total || 0), 0)
-  const avgOrder      = filtered.length ? totalRevenue / filtered.length : 0
-  const prevAvg       = prev.length ? prevRevenue / prev.length : 0
+  const totalRevenue  = revenueOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0)
+  const prevRevenue   = prevRevenueOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0)
+  const avgOrder      = revenueOrders.length ? totalRevenue / revenueOrders.length : 0
+  const prevAvg       = prevRevenueOrders.length ? prevRevenue / prevRevenueOrders.length : 0
   const delivered     = filtered.filter(o => o.status === 'delivered').length
   const prevDelivered = prev.filter(o => o.status === 'delivered').length
   const totalDiscount = filtered.reduce((s, o) => s + parseFloat(o.discount || 0), 0)
