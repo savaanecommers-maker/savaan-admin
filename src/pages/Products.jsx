@@ -586,7 +586,7 @@ export default function Products() {
                         const fd = new FormData()
                         fd.append('file', file)
                         const { data, error } = await api.upload('/api/upload?folder=products', fd)
-                        if (error) throw new Error(error)
+                        if (error) throw new Error(error.message || 'Upload failed')
                         return data.url
                       }))
                       setForm(prev => ({ ...prev, images: [...(prev.images || []), ...urls] }))
