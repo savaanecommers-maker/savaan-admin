@@ -105,6 +105,17 @@ export default function Orders() {
     load()
   }
 
+  const [shipping, setShipping] = useState(false)
+  async function shipOrder(orderId) {
+    setShipping(true)
+    const res = await api.put(`/api/orders/${orderId}/ship`, {})
+    setShipping(false)
+    if (res.error) { alert('Shipping failed: ' + (res.error?.message || res.error)); return }
+    setSelected(prev => prev ? { ...prev, ...res.data } : prev)
+    setDetail(prev => prev ? { ...prev, ...res.data } : prev)
+    load()
+  }
+
   const cols = [
     {
       key: 'order_number', label: 'Order ID',
@@ -230,6 +241,33 @@ export default function Orders() {
                   <div className="col-span-2">
                     <p className="text-xs text-slate-400">Cashfree Order ID</p>
                     <p className="font-mono text-xs text-slate-600 break-all">{o.cf_order_id}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Shipping / courier */}
+              <div className="rounded-xl border border-slate-100 p-3 bg-slate-50/60">
+                {o.awb_number ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-slate-400">Shipped via {o.courier_partner}</p>
+                      <p className="font-mono text-sm font-semibold text-teal-600">AWB: {o.awb_number}</p>
+                      {o.courier_status && <p className="text-xs text-slate-500 mt-0.5">Status: {o.courier_status}</p>}
+                    </div>
+                    <a href={`https://www.delhivery.com/track-v2/package/${o.awb_number}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-xs font-semibold text-teal-600 underline">
+                      Track →
+                    </a>
+                  </div>
+                ) : ['cancelled', 'returned', 'return_requested'].includes(o.status) ? (
+                  <p className="text-xs text-slate-400">Not applicable — order is {o.status}.</p>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-400">Not shipped yet</p>
+                    <Button size="sm" disabled={shipping} onClick={() => shipOrder(o.id)}>
+                      {shipping ? 'Shipping…' : 'Ship via Delhivery'}
+                    </Button>
                   </div>
                 )}
               </div>
