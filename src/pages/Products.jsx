@@ -257,7 +257,18 @@ export default function Products() {
   async function openVariants(product) {
     setVariantProductId(product.id)
     setVariantProductName(product.name)
-    setVariantCategoryName(product.category_name || '')
+    // Resolve the TOP-LEVEL ancestor category (e.g. "Footwear"), not the
+    // leaf subcategory name (e.g. "Women's Footwear", "Sandals" renamed to
+    // something else, etc). Leaf names are admin-editable free text and
+    // can drift away from any keyword match, silently hiding the
+    // quick-add-sizes panel. Top-level category names are the stable,
+    // structural label this detection should actually key off of.
+    let cat = categories.find(c => c.id === product.category_id)
+    while (cat?.parent_id) {
+      cat = categories.find(c => c.id === cat.parent_id) || cat
+      if (!cat?.parent_id) break
+    }
+    setVariantCategoryName(cat?.name || product.category_name || '')
     setVariantForm(EMPTY_VARIANT)
     setEditingVariantId(null)
     setBulkStock('')
