@@ -244,7 +244,11 @@ export default function Products() {
       setModal(false)
       await load()
       if (savedProduct?.id) {
-        openVariants({ id: savedProduct.id, name: savedProduct.name, has_variants: true })
+        // Pass the full saved product through (it already has category_id
+        // from the INSERT's RETURNING *) — a stripped {id, name} object here
+        // previously broke fashion/footwear detection for brand-new variant
+        // products, since there was no category_id to resolve against.
+        openVariants(savedProduct)
       }
     } else {
       setModal(false); load()
