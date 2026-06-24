@@ -135,6 +135,20 @@ export default function Products() {
   // value apply to every size added in the same bulk action.
   const [bulkStock, setBulkStock] = useState('')
   const [bulkPrice, setBulkPrice] = useState('')
+  // Multi-select size/color generator — the actual "select all applicable
+  // sizes and colors, generate the full grid in one click" workflow for
+  // fashion/footwear, instead of adding one size at a time.
+  const [genSizes, setGenSizes]           = useState(new Set())
+  const [genColors, setGenColors]         = useState(new Set())
+  const [genCustomColor, setGenCustomColor] = useState('')
+  const [generating, setGenerating]       = useState(false)
+  // Bulk-edit toolbar — apply one value to many existing variants at once
+  // (selected rows, or every variant if none are selected).
+  const [selectedVariantIds, setSelectedVariantIds] = useState(new Set())
+  const [bulkEditStock, setBulkEditStock]           = useState('')
+  const [bulkEditPrice, setBulkEditPrice]           = useState('')
+  const [bulkEditSalePrice, setBulkEditSalePrice]   = useState('')
+  const [bulkEditing, setBulkEditing]               = useState(false)
   const [editingVariantId, setEditingVariantId]       = useState(null)
   const [editVariantValues, setEditVariantValues]     = useState({})
   const [uploadingVariantImg, setUploadingVariantImg] = useState(false)
@@ -273,6 +287,11 @@ export default function Products() {
     setEditingVariantId(null)
     setBulkStock('')
     setBulkPrice('')
+    setGenSizes(new Set())
+    setGenColors(new Set())
+    setGenCustomColor('')
+    setSelectedVariantIds(new Set())
+    setBulkEditStock(''); setBulkEditPrice(''); setBulkEditSalePrice('')
     await refreshVariants(product.id)
     setVariantModal(true)
   }
@@ -313,27 +332,78 @@ export default function Products() {
     setSavingVariant(false)
   }
 
-  // Quick-add a full size preset at once, using the bulk stock/price (if set)
-  // for every size in the batch — saves opening and editing each variant
-  // individually just to set the same stock number on all of them.
-  async function addSizePreset(sizes) {
-    setSavingVariant(true)
-    const color = variantForm.color || null
-    const stock = parseInt(bulkStock) || 0
-    const price = bulkPrice ? parseFloat(bulkPrice) : null
-    const toAdd = sizes.filter(sz =>
-      !variants.some(v => v.size === sz && (color ? v.color === color : !v.color))
-    )
-    await Promise.all(toAdd.map(sz => {
-      const autoName = [color, sz].filter(Boolean).join(' / ')
-      return api.post(`/api/products/${variantProductId}/variants`, {
-        size: sz, color, stock, price,
-        variant_name: autoName || null,
-        status: 'active', images: [], attributes: {},
-      })
-    }))
-    await refreshVariants()
-    setSavingVariant(false)
+  function toggleInSet(setFn) {
+    return (value) => setFn(prev => {
+      const next = new Set(prev)
+      next.has(value) ? next.delete(value) : next.add(value)
+      return next
+    })
+  }
+  const toggleGenSize  = toggleInSet(setGenSizes)
+  const toggleGenColor = toggleInSet(setGenColors)
+
+  function addCustomGenColor() {
+    const c = genCustomColor.trim()
+    if (!c) return
+    setGenColors(prev => new Set(prev).add(c))
+    setGenCustomColor('')
+  }
+
+  // Generate the full size × color grid in one call — the actual
+  // "select sizes, select colors, generate" workflow. Sizes or colors can
+  // be used alone (e.g. perfume sizes with no color at all).
+  async function generateVariants() {
+    if (genSizes.size === 0 && genColors.size === 0) {
+      alert('Select at least one size or color first.')
+      return
+    }
+    setGenerating(true)
+    const res = await api.post(`/api/products/${variantProductId}/variants/bulk-generate`, {
+      sizes:  genSizes.size  ? Array.from(genSizes)  : null,
+      colors: genColors.size ? Array.from(genColors) : null,
+      stock:  bulkStock,
+      price:  bulkPrice,
+    })
+    if (res.error) {
+      alert('Failed to generate variants: ' + (res.error?.message || res.error))
+    } else {
+      setGenSizes(new Set())
+      setGenColors(new Set())
+      await refreshVariants()
+    }
+    setGenerating(false)
+  }
+
+  function toggleVariantSelected(id) {
+    setSelectedVariantIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  // Apply one stock/price/sale-price value to every selected variant, or
+  // to every variant of this product if none are individually selected —
+  // "apply ₹999 to all variants" / "set stock to 50 for all".
+  async function applyBulkEdit() {
+    const body = {}
+    if (bulkEditStock !== '')      body.stock = bulkEditStock
+    if (bulkEditPrice !== '')      body.price = bulkEditPrice
+    if (bulkEditSalePrice !== '')  body.sale_price = bulkEditSalePrice
+    if (Object.keys(body).length === 0) {
+      alert('Enter a stock, price, or sale price value to apply.')
+      return
+    }
+    if (selectedVariantIds.size) body.variant_ids = Array.from(selectedVariantIds)
+    setBulkEditing(true)
+    const res = await api.patch(`/api/products/${variantProductId}/variants/bulk-update`, body)
+    if (res.error) {
+      alert('Bulk update failed: ' + (res.error?.message || res.error))
+    } else {
+      setBulkEditStock(''); setBulkEditPrice(''); setBulkEditSalePrice('')
+      await refreshVariants()
+    }
+    setBulkEditing(false)
   }
 
   async function duplicateVariant(v) {
@@ -877,48 +947,73 @@ export default function Products() {
           <Modal open={variantModal} onClose={() => { setVariantModal(false); load() }}
             title={`Variants — ${variantProductName}`} width="max-w-3xl">
 
-            {/* ── Quick-add size preset strip ── */}
+            {/* ── Fashion/Footwear variant generator: select sizes + colors,
+                   generate the whole grid in one click ── */}
             {sizeOptions.length > 0 && (
               <div className="mb-4 p-3 bg-violet-50 rounded-xl border border-violet-100">
                 <p className="text-[10px] font-bold text-violet-500 uppercase tracking-wide mb-2">
-                  Quick-add {isFootwear ? 'UK' : ''} sizes
+                  1. Select {isFootwear ? 'UK' : ''} sizes
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {sizeOptions.map(sz => (
+                    <button key={sz} onClick={() => toggleGenSize(sz)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                        genSizes.has(sz) ? 'bg-violet-600 text-white'
+                                         : 'bg-white border border-violet-200 text-violet-700 hover:bg-violet-100'
+                      }`}>
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-[10px] font-bold text-violet-500 uppercase tracking-wide mb-2">
+                  2. Select colors <span className="font-normal normal-case text-slate-400">(optional)</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {colorPresets.map(c => (
+                    <button key={c} onClick={() => toggleGenColor(c)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                        genColors.has(c) ? 'bg-violet-600 text-white'
+                                         : 'bg-white border border-violet-200 text-violet-700 hover:bg-violet-100'
+                      }`}>
+                      {c}
+                    </button>
+                  ))}
+                  {Array.from(genColors).filter(c => !colorPresets.includes(c)).map(c => (
+                    <button key={c} onClick={() => toggleGenColor(c)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-600 text-white">
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <input value={genCustomColor} onChange={e => setGenCustomColor(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCustomGenColor()}
+                    placeholder="Custom color…"
+                    className="text-xs border border-violet-200 rounded-lg px-2 py-1 bg-white w-32" />
+                  <button onClick={addCustomGenColor}
+                    className="px-2 py-1 rounded-lg text-xs font-semibold bg-white border border-violet-200 text-violet-700 hover:bg-violet-100">
+                    + Add
+                  </button>
+                </div>
+
+                <p className="text-[10px] font-bold text-violet-500 uppercase tracking-wide mb-2">
+                  3. Stock &amp; price for every variant generated
                 </p>
                 <div className="flex flex-wrap gap-2 mb-3">
-                  <select value={variantForm.color || ''}
-                    onChange={e => setVariantForm(p => ({ ...p, color: e.target.value }))}
-                    className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white text-violet-700">
-                    <option value="">No color</option>
-                    {colorPresets.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <input type="number" min={0} placeholder="Stock for each size"
+                  <input type="number" min={0} placeholder="Stock for each"
                     value={bulkStock} onChange={e => setBulkStock(e.target.value)}
-                    className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white w-36" />
+                    className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white w-32" />
                   <input type="number" min={0} placeholder="Price (optional)"
                     value={bulkPrice} onChange={e => setBulkPrice(e.target.value)}
                     className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white w-32" />
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {sizeOptions.map(sz => {
-                    const exists = variants.some(v => v.size === sz && (!variantForm.color || v.color === variantForm.color))
-                    return (
-                      <button key={sz} disabled={savingVariant || exists}
-                        onClick={() => addSizePreset([sz])}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                          exists ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                 : 'bg-white border border-violet-200 text-violet-700 hover:bg-violet-100'
-                        }`}>
-                        {sz}{exists ? ' ✓' : ''}
-                      </button>
-                    )
-                  })}
-                  {sizeOptions.length > 0 && (
-                    <button disabled={savingVariant}
-                      onClick={() => addSizePreset(sizeOptions.filter(sz => !variants.some(v => v.size === sz && (!variantForm.color || v.color === variantForm.color))))}
-                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
-                      + Add All
-                    </button>
-                  )}
-                </div>
+
+                <button disabled={generating || (genSizes.size === 0 && genColors.size === 0)}
+                  onClick={generateVariants}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                  {generating ? 'Generating…' : `Generate ${Math.max(genSizes.size, 1) * Math.max(genColors.size, 1)} Variant${Math.max(genSizes.size, 1) * Math.max(genColors.size, 1) === 1 ? '' : 's'}`}
+                </button>
               </div>
             )}
 
@@ -932,10 +1027,42 @@ export default function Products() {
                 <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
                   <p className="text-xs font-semibold text-slate-600">{variants.length} variants · {totalVariantStock} total units</p>
                 </div>
+
+                {/* ── Bulk-edit toolbar: apply one value to selected (or all) variants ── */}
+                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">
+                    {selectedVariantIds.size > 0 ? `Apply to ${selectedVariantIds.size} selected` : 'Apply to all variants'}
+                  </span>
+                  <input type="number" min={0} placeholder="Stock" value={bulkEditStock}
+                    onChange={e => setBulkEditStock(e.target.value)}
+                    className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-white w-20" />
+                  <input type="number" min={0} placeholder="Price" value={bulkEditPrice}
+                    onChange={e => setBulkEditPrice(e.target.value)}
+                    className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-white w-20" />
+                  <input type="number" min={0} placeholder="Sale price" value={bulkEditSalePrice}
+                    onChange={e => setBulkEditSalePrice(e.target.value)}
+                    className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-white w-24" />
+                  <button disabled={bulkEditing} onClick={applyBulkEdit}
+                    className="px-3 py-1 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50">
+                    {bulkEditing ? 'Applying…' : 'Apply'}
+                  </button>
+                  {selectedVariantIds.size > 0 && (
+                    <button onClick={() => setSelectedVariantIds(new Set())}
+                      className="text-[10px] text-amber-700 underline">
+                      Clear selection
+                    </button>
+                  )}
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50/50">
+                        <th className="py-2 px-2.5">
+                          <input type="checkbox"
+                            checked={selectedVariantIds.size === variants.length && variants.length > 0}
+                            onChange={e => setSelectedVariantIds(e.target.checked ? new Set(variants.map(v => v.id)) : new Set())} />
+                        </th>
                         {['Variant', 'Color', 'Size', 'Attributes', 'Stock', 'Price', 'Sale Price', 'SKU', 'Images', 'Status', ''].map(h => (
                           <th key={h} className="text-left py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
                         ))}
@@ -947,6 +1074,10 @@ export default function Products() {
                         const varImgs = Array.isArray(v.images) ? v.images : []
                         return (
                           <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50/60 group align-top">
+                            <td className="py-2 px-2.5">
+                              <input type="checkbox" checked={selectedVariantIds.has(v.id)}
+                                onChange={() => toggleVariantSelected(v.id)} />
+                            </td>
                             {isEditing ? (
                               <>
                                 <td className="py-2 px-2 min-w-[120px]">
