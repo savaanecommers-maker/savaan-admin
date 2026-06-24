@@ -129,6 +129,12 @@ export default function Products() {
   const EMPTY_VARIANT = { variant_name: '', color: '', size: '', stock: 0, price: '', sale_price: '', sku: '', status: 'active', images: [], attributes: {} }
   const [variantForm, setVariantForm]                 = useState(EMPTY_VARIANT)
   const [savingVariant, setSavingVariant]             = useState(false)
+  // Bulk size-add defaults — quick-adding 5+ sizes used to create every
+  // variant with stock=0, leaving the admin to open and edit each one
+  // individually just to set a stock number. These let one stock/price
+  // value apply to every size added in the same bulk action.
+  const [bulkStock, setBulkStock] = useState('')
+  const [bulkPrice, setBulkPrice] = useState('')
   const [editingVariantId, setEditingVariantId]       = useState(null)
   const [editVariantValues, setEditVariantValues]     = useState({})
   const [uploadingVariantImg, setUploadingVariantImg] = useState(false)
@@ -254,6 +260,8 @@ export default function Products() {
     setVariantCategoryName(product.category_name || '')
     setVariantForm(EMPTY_VARIANT)
     setEditingVariantId(null)
+    setBulkStock('')
+    setBulkPrice('')
     await refreshVariants(product.id)
     setVariantModal(true)
   }
@@ -294,21 +302,25 @@ export default function Products() {
     setSavingVariant(false)
   }
 
-  // Quick-add a full size preset (all sizes at once with 0 stock, selected color)
+  // Quick-add a full size preset at once, using the bulk stock/price (if set)
+  // for every size in the batch — saves opening and editing each variant
+  // individually just to set the same stock number on all of them.
   async function addSizePreset(sizes) {
     setSavingVariant(true)
     const color = variantForm.color || null
-    for (const sz of sizes) {
-      const exists = variants.some(v => v.size === sz && (color ? v.color === color : !v.color))
-      if (!exists) {
-        const autoName = [color, sz].filter(Boolean).join(' / ')
-        await api.post(`/api/products/${variantProductId}/variants`, {
-          size: sz, color, stock: 0, price: null,
-          variant_name: autoName || null,
-          status: 'active', images: [], attributes: {},
-        })
-      }
-    }
+    const stock = parseInt(bulkStock) || 0
+    const price = bulkPrice ? parseFloat(bulkPrice) : null
+    const toAdd = sizes.filter(sz =>
+      !variants.some(v => v.size === sz && (color ? v.color === color : !v.color))
+    )
+    await Promise.all(toAdd.map(sz => {
+      const autoName = [color, sz].filter(Boolean).join(' / ')
+      return api.post(`/api/products/${variantProductId}/variants`, {
+        size: sz, color, stock, price,
+        variant_name: autoName || null,
+        status: 'active', images: [], attributes: {},
+      })
+    }))
     await refreshVariants()
     setSavingVariant(false)
   }
@@ -858,8 +870,22 @@ export default function Products() {
             {sizeOptions.length > 0 && (
               <div className="mb-4 p-3 bg-violet-50 rounded-xl border border-violet-100">
                 <p className="text-[10px] font-bold text-violet-500 uppercase tracking-wide mb-2">
-                  Quick-add {isFootwear ? 'UK' : ''} sizes {variantForm.color ? `(color: ${variantForm.color})` : ''}
+                  Quick-add {isFootwear ? 'UK' : ''} sizes
                 </p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <select value={variantForm.color || ''}
+                    onChange={e => setVariantForm(p => ({ ...p, color: e.target.value }))}
+                    className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white text-violet-700">
+                    <option value="">No color</option>
+                    {colorPresets.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input type="number" min={0} placeholder="Stock for each size"
+                    value={bulkStock} onChange={e => setBulkStock(e.target.value)}
+                    className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white w-36" />
+                  <input type="number" min={0} placeholder="Price (optional)"
+                    value={bulkPrice} onChange={e => setBulkPrice(e.target.value)}
+                    className="text-xs border border-violet-200 rounded-lg px-2 py-1.5 bg-white w-32" />
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {sizeOptions.map(sz => {
                     const exists = variants.some(v => v.size === sz && (!variantForm.color || v.color === variantForm.color))
