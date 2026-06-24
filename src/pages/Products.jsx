@@ -12,6 +12,26 @@ function isFashionCategory(catName = '') {
   return VARIANT_CATEGORY_KEYWORDS.some(k => lower.includes(k))
 }
 
+// ── Group categories by parent for the product category dropdowns.
+// Products are assigned to a specific subcategory, never to a broad
+// top-level grouping (every parent here has children) — so parents render
+// as <optgroup> labels only, never as a selectable value themselves. A
+// parent with no children at all still renders as a plain selectable
+// option, so this stays correct if a childless top-level category is
+// ever added later.
+function groupCategoriesForSelect(categories) {
+  const parents  = categories.filter(c => !c.parent_id)
+  const byParent = id => categories.filter(c => c.parent_id === id)
+  const groups = []
+  const standalone = []
+  for (const p of parents) {
+    const children = byParent(p.id)
+    if (children.length) groups.push({ parent: p, children })
+    else standalone.push(p)
+  }
+  return { groups, standalone }
+}
+
 // ── Preset size groups
 const SIZE_PRESETS = {
   clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
@@ -474,6 +494,8 @@ export default function Products() {
   // ── Total variant stock
   const totalVariantStock = variants.reduce((s, v) => s + (parseInt(v.stock) || 0), 0)
 
+  const { groups: catGroups, standalone: catStandalone } = groupCategoriesForSelect(categories)
+
   return (
     <Layout title="Products">
       <Card>
@@ -481,7 +503,12 @@ export default function Products() {
           <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 focus:outline-none focus:border-teal-500">
             <option value="all">All Categories</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {catGroups.map(({ parent, children }) => (
+              <optgroup key={parent.id} label={parent.name}>
+                {children.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </optgroup>
+            ))}
+            {catStandalone.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <div className="relative flex-1 max-w-xs">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -529,7 +556,12 @@ export default function Products() {
 
           <Select label="Category" value={form.category_id} onChange={e => onCategoryChange(e.target.value)}>
             <option value="">Select category</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {catGroups.map(({ parent, children }) => (
+              <optgroup key={parent.id} label={parent.name}>
+                {children.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </optgroup>
+            ))}
+            {catStandalone.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
           <Input label="Brand" value={form.brand}
             onChange={e => setForm({...form, brand: e.target.value})} placeholder="Enter brand" />
