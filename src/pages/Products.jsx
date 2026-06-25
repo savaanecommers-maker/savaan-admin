@@ -103,7 +103,7 @@ const EMPTY = {
   name: '', sku: '', category_id: '', brand: '', description: '',
   price: '', original_price: '', stock: 0, is_featured: false,
   is_flash_deal: false, is_staff_pick: false, images: [], has_variants: false,
-  attributes: [],
+  attributes: [], weight_grams: '',
 }
 
 export default function Products() {
@@ -228,6 +228,7 @@ export default function Products() {
       images: form.images,
       image_url: form.images?.[0] || null,
       attributes: (form.attributes || []).length > 0 ? form.attributes : null,
+      weight_grams: form.weight_grams ? parseInt(form.weight_grams) : null,
     }
     let res
     if (editing) {
@@ -800,6 +801,13 @@ export default function Products() {
                 onChange={e => setForm({...form, stock: e.target.value})} />
             </div>
           )}
+
+          <div>
+            <Input label="Weight (grams)" type="number" min="0" placeholder="e.g. 250"
+              value={form.weight_grams}
+              onChange={e => setForm({...form, weight_grams: e.target.value})} />
+            <p className="text-[10px] text-slate-400 mt-1">Used for courier shipping cost — leave blank to use a 500g estimate.</p>
+          </div>
 
           {/* Options checkboxes */}
           <div className={`flex flex-col gap-3 ${!form.has_variants ? '' : 'col-start-2'}`}>
