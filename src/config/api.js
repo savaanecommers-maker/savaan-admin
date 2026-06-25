@@ -77,7 +77,20 @@ async function request(method, path, body, isFormData = false) {
     res = await makeRequest(token)
   } catch (e) {
     if (e.name === 'AbortError') return { data: null, error: { message: 'Request timed out. Please try again.' } }
-    return { data: null, error: { message: 'Network error. Check your connection.' } }
+    // One automatic retry, GET only — a brief connection drop is common
+    // enough to be worth one free retry. Only safe for GET: retrying a
+    // POST/PUT/DELETE after a network failure risks a duplicate write if
+    // the original request actually reached the server and only the
+    // response got lost, so mutating requests are never auto-retried.
+    if (method === 'GET') {
+      try {
+        res = await makeRequest(token)
+      } catch (e2) {
+        return { data: null, error: { message: 'Network error. Check your connection.' } }
+      }
+    } else {
+      return { data: null, error: { message: 'Network error. Check your connection.' } }
+    }
   }
 
   if (res.status === 401) {
