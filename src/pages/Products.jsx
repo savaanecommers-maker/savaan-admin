@@ -155,6 +155,7 @@ export default function Products() {
 
   const mountedRef = useRef(true)
   const [loadError, setLoadError] = useState(null)
+  const [totalProducts, setTotalProducts] = useState(null)
   const PER_PAGE = 10
 
   useEffect(() => {
@@ -167,7 +168,12 @@ export default function Products() {
     setLoading(true)
     setLoadError(null)
     const [pr, cr] = await Promise.all([
-      api.get('/api/products/all'),
+      // Without ?limit, the backend defaults to 200 — the product list
+      // silently excludes anything past that, and "X products" below
+      // shows the truncated count instead of the real total. 500 matches
+      // the backend's own hard cap (Math.min(..., 500)), so this loads
+      // everything that endpoint can return in one page.
+      api.get('/api/products/all?limit=500'),
       api.get('/api/categories'),
     ])
     if (!mountedRef.current) return
@@ -177,6 +183,7 @@ export default function Products() {
       return
     }
     setProducts(pr.data?.products ?? pr.data ?? [])
+    setTotalProducts(pr.data?.total ?? null)
     setCategories(cr.data?._list ?? cr.data ?? [])
     setLoading(false)
   }
@@ -639,6 +646,11 @@ export default function Products() {
               </p>
               <Pagination page={page} totalPages={totalPages} onPage={setPage} />
             </div>
+            {totalProducts != null && totalProducts > products.length && (
+              <p className="px-4 pb-3 text-xs text-amber-600">
+                Catalog has {totalProducts} products total — only the first {products.length} are loaded here. Ask for proper server-side pagination if the catalog keeps growing past this.
+              </p>
+            )}
           </>
         )}
       </Card>
